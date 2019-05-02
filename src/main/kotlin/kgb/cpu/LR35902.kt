@@ -21,14 +21,6 @@ class LR35902(
     private var interruptsEnabled = true
 
 
-    fun reset() {
-        stackPointer = 0xFFFEu
-        programCounter = 0x0100u
-
-        cpuHalted = false
-        interruptsEnabled = true
-    }
-
     fun step() {
         if (cpuHalted) {
             // Skip only once if interrupts are disabled [ See gbcpuman.pdf, Page 19 ]
@@ -40,7 +32,7 @@ class LR35902(
         when(val opcode = command.toUInt()) {
             // Commands
             0x00u -> {}  // NoOp
-            0x76u -> halt()
+            0x76u -> cpuHalted = true // HALT
             0xF3u -> di()
             0xFBu -> ei()
 
@@ -49,7 +41,7 @@ class LR35902(
             0x3Fu -> ccf()
 
             // Jump
-            0xC3u -> jp()
+            0xC3u -> `JP (a16)`()
 
             // Load Immediate 8bit value
             0x06u, 0x0Eu, 0x16u,
@@ -58,7 +50,16 @@ class LR35902(
             //Load Registers
             0xFAu -> `LD A, (a16)`()
 
+//            in 0x80u..0x87u -> `ADD A, r`()
+//            in 0x88u..0x8Fu -> `ADC A, r`()
+//            in 0x90u..0x97u -> `SUB A, r`()
+//            in 0x98u..0x97u -> `SBC A, r`()
+//            in 0xA0u..0xA7u -> `AND r`()
+//            in 0xA8u..0xAFu -> `XOR r`()
+            in 0xB0u..0xB7u -> `OR r`(opcode)
+//            in 0xB8u..0xBFu -> `CP r`()
             in 0x40u..0x7Fu -> `LD r1, r2`(opcode)
+
 
             0xCBu -> when (val cbOp = memory[programCounter++].toUInt()) {
                 in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
@@ -69,10 +70,6 @@ class LR35902(
 
             else -> throw NotImplementedError()
         }
-    }
-
-    private fun halt() {
-        cpuHalted = true
     }
 
     private fun di() {
@@ -95,7 +92,7 @@ class LR35902(
         subtractBit = false
     }
 
-    private fun jp() {
+    private fun `JP (a16)`() {
         programCounter = asWord(memory[programCounter++], memory[programCounter++])
     }
 
@@ -161,6 +158,16 @@ class LR35902(
         val writeOffset = (opcode - 0x40u) / 8u
         val readOffset = opcode % 8u
         writeRegisterBy(writeOffset, readRegisterBy(readOffset))
+    }
+
+    private fun `OR r`(opcode: UInt) {
+        val offset = opcode % 8u
+        A = readRegisterBy(offset) or A
+
+        zeroBit = A == 0x0u.toUByte()
+        carryBit = false
+        halfCarryBit = false
+        subtractBit = false
     }
 
     private fun setBitForRegisterTo(offset: UInt, bit: Int, value: Boolean) {

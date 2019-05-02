@@ -56,16 +56,9 @@ class LR35902(
             0x1Eu, 0x26u, 0x2Eu, 0x3Eu -> `LD n, d8`(opcode)
 
             //Load Registers
-            in 0x78u..0x7Fu -> `LD A, n`(opcode)
             0xFAu -> `LD A, (a16)`()
 
-            in 0x40u..0x47u -> `LD B, n`(opcode)
-            in 0x48u..0x4Fu -> `LD C, n`(opcode)
-            in 0x50u..0x57u -> `LD D, n`(opcode)
-            in 0x58u..0x5Fu -> `LD E, n`(opcode)
-            in 0x60u..0x67u -> `LD H, n`(opcode)
-            in 0x68u..0x6Fu -> `LD L, n`(opcode)
-            in 0x70u..0x75u, 0x77u -> `LD (HL), n`(opcode)
+            in 0x40u..0x7Fu -> `LD r1, r2`(opcode)
 
             0xCBu -> when (val cbOp = memory[programCounter++].toUInt()) {
                 in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
@@ -119,7 +112,32 @@ class LR35902(
         }
     }
 
-    private fun readFromRegister(offset: UInt): UByte {
+    /**
+     * Many commands use the same offset scheme to determine
+     * which register to write.
+     *
+     * This simplifies read commands to a single call
+     */
+    private fun writeRegisterBy(offset: UInt, value: UByte) {
+        when (offset) {
+            0x7u -> A = value
+            0x0u -> B = value
+            0x1u -> C = value
+            0x2u -> D = value
+            0x3u -> E = value
+            0x4u -> H = value
+            0x5u -> L = value
+            0x6u -> memory[HL] = value
+        }
+    }
+
+    /**
+     * Many commands use the same offset scheme to determine
+     * which register to read.
+     *
+     * This simplifies read commands to a single call
+     */
+    private fun readRegisterBy(offset: UInt): UByte {
         return when (offset) {
             0x7u -> A
             0x0u -> B
@@ -133,55 +151,20 @@ class LR35902(
         }
     }
 
-    private fun `LD A, n`(opcode: UInt) {
-        A = readFromRegister(opcode - 0x78u)
-    }
-
     private fun `LD A, (a16)`() {
         val low = memory[programCounter++]
         val high = memory[programCounter++]
         A = memory[asWord(low, high)]
     }
 
-    private fun `LD B, n`(opcode: UInt) {
-        B = readFromRegister(opcode - 0x40u)
-    }
-
-    private fun `LD C, n`(opcode: UInt) {
-        C = readFromRegister(opcode - 0x48u)
-    }
-
-    private fun `LD D, n`(opcode: UInt) {
-        D = readFromRegister(opcode - 0x50u)
-    }
-
-    private fun `LD E, n`(opcode: UInt) {
-        E = readFromRegister(opcode - 0x58u)
-    }
-
-    private fun `LD H, n`(opcode: UInt) {
-        H = readFromRegister(opcode - 0x60u)
-    }
-
-    private fun `LD L, n`(opcode: UInt) {
-        L = readFromRegister(opcode - 0x68u)
-    }
-
-    private fun `LD (HL), n`(opcode: UInt) {
-        memory[HL] = readFromRegister(opcode - 0x70u)
+    private fun `LD r1, r2`(opcode: UInt) {
+        val writeOffset = (opcode - 0x40u) / 8u
+        val readOffset = opcode % 8u
+        writeRegisterBy(writeOffset, readRegisterBy(readOffset))
     }
 
     private fun setBitForRegisterTo(offset: UInt, bit: Int, value: Boolean) {
-        when (offset) {
-            0x7u -> A = A.withBit(bit, value)
-            0x0u -> B = B.withBit(bit, value)
-            0x1u -> C = C.withBit(bit, value)
-            0x2u -> D = D.withBit(bit, value)
-            0x3u -> E = E.withBit(bit, value)
-            0x4u -> H = H.withBit(bit, value)
-            0x5u -> L = L.withBit(bit, value)
-            0x6u -> memory[HL] = memory[HL].withBit(bit, value)
-        }
+        writeRegisterBy(offset, readRegisterBy(offset).withBit(bit, value))
     }
 
     private fun `BIT b, n`(opcode: UInt) {
@@ -190,7 +173,7 @@ class LR35902(
 
         halfCarryBit = true
         carryBit = false
-        zeroBit = !readFromRegister(offset).bit(bit.toInt())
+        zeroBit = !readRegisterBy(offset).bit(bit.toInt())
     }
 
     private fun `RES b, n`(opcode: UInt) {

@@ -1,22 +1,17 @@
 package best.william.kgb.cpu
 
+import kgb.util.bit
+import kgb.util.withBit
 import kotlin.reflect.KProperty
 
 @ExperimentalUnsignedTypes
-class StatusBit(position: Int) {
-    private val mask: UByte = (1u shl position).toUByte()
-    private val invMask = mask.inv()
-
+class StatusBit(val position: Int) {
     operator fun getValue(thisRef: Holder, property: KProperty<*>): Boolean {
-        return thisRef.statusRegister.and(mask) != 0.toUByte()
+        return thisRef.statusRegister.bit(position)
     }
 
     operator fun setValue(thisRef: Holder, property: KProperty<*>, value: Boolean) {
-        thisRef.statusRegister = if (value) {
-            thisRef.statusRegister.or(mask)
-        } else {
-            thisRef.statusRegister.and(invMask)
-        }
+        thisRef.statusRegister = thisRef.statusRegister.withBit(position, value)
     }
 
     interface Holder {

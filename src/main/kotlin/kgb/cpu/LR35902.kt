@@ -1,6 +1,7 @@
 package best.william.kgb.cpu
 import best.william.kgb.memory.IMemory
-import kotlin.contracts.contract
+import kgb.util.bit
+import kgb.util.withBit
 
 @ExperimentalUnsignedTypes
 class LR35902(
@@ -64,6 +65,14 @@ class LR35902(
             in 0x58u..0x5Fu -> `LD E, n`(opcode)
             in 0x60u..0x67u -> `LD H, n`(opcode)
             in 0x68u..0x6Fu -> `LD L, n`(opcode)
+            in 0x70u..0x75u, 0x77u -> `LD (HL), n`(opcode)
+
+            0xCBu -> when (val cbOp = memory[programCounter++].toUInt()) {
+                in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
+                in 0x80u..0xBFu -> `RES b, n`(cbOp)
+                in 0xC0u..0xFFu -> `SET b, n`(cbOp)
+                else -> throw NotImplementedError()
+            }
 
             else -> throw NotImplementedError()
         }
@@ -156,5 +165,43 @@ class LR35902(
 
     private fun `LD L, n`(opcode: UInt) {
         L = readFromRegister(opcode - 0x68u)
+    }
+
+    private fun `LD (HL), n`(opcode: UInt) {
+        memory[HL] = readFromRegister(opcode - 0x70u)
+    }
+
+    private fun setBitForRegisterTo(offset: UInt, bit: Int, value: Boolean) {
+        when (offset) {
+            0x7u -> A = A.withBit(bit, value)
+            0x0u -> B = B.withBit(bit, value)
+            0x1u -> C = C.withBit(bit, value)
+            0x2u -> D = D.withBit(bit, value)
+            0x3u -> E = E.withBit(bit, value)
+            0x4u -> H = H.withBit(bit, value)
+            0x5u -> L = L.withBit(bit, value)
+            0x6u -> memory[HL] = memory[HL].withBit(bit, value)
+        }
+    }
+
+    private fun `BIT b, n`(opcode: UInt) {
+        val offset = opcode % 8u
+        val bit = (opcode - 0x40u) / 8u
+
+        halfCarryBit = true
+        carryBit = false
+        zeroBit = !readFromRegister(offset).bit(bit.toInt())
+    }
+
+    private fun `RES b, n`(opcode: UInt) {
+        val offset = opcode % 8u
+        val bit = (opcode - 0x80u) / 8u
+        setBitForRegisterTo(offset, bit.toInt(), false)
+    }
+
+    private fun `SET b, n`(opcode: UInt) {
+        val offset = opcode % 8u
+        val bit = (opcode - 0xC0u) / 8u
+        setBitForRegisterTo(offset, bit.toInt(), true)
     }
 }

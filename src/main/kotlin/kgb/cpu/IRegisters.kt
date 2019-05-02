@@ -16,8 +16,13 @@ interface IRegisters: StatusBit.Holder {
     val DE: UShort
         get() = asWord(E, D)
 
-    val HL: UShort
+    var HL: UShort
         get() = asWord(L, H)
+        set(value) {
+            val valueInt = value.toUInt()
+            H = (valueInt shr 8).toUByte()
+            L = (valueInt and 0xFFu).toUByte()
+        }
 }
 
 @ExperimentalUnsignedTypes

@@ -44,7 +44,7 @@ class LR35902LoadATests {
         memory[0u] = 0x79u
 
         cpu.step()
-        assertEquals(0x23u.toUByte(), cpu.C)
+        assertEquals(0x23u.toUByte(), cpu.A)
     }
 
     @Test
@@ -54,7 +54,7 @@ class LR35902LoadATests {
         memory[0u] = 0x7Au
 
         cpu.step()
-        assertEquals(0x23u.toUByte(), cpu.A)
+        assertEquals(cpu.D, cpu.A)
     }
 
     @Test
@@ -96,7 +96,7 @@ class LR35902LoadATests {
         memory[0x123u] = 0x18u
 
         cpu.step()
-        assertEquals(0x18u.toUByte(), cpu.A)
+        assertEquals(memory[0x123u], cpu.A)
     }
 
 

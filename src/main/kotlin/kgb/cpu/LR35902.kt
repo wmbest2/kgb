@@ -59,7 +59,7 @@ class LR35902(
 //            in 0x88u..0x8Fu -> `ADC A, r`()
 //            in 0x90u..0x97u -> `SUB A, r`()
 //            in 0x98u..0x97u -> `SBC A, r`()
-//            in 0xA0u..0xA7u -> `AND r`()
+            in 0xA0u..0xA7u -> `AND r`(opcode)
 //            in 0xA8u..0xAFu -> `XOR r`()
             in 0xB0u..0xB7u -> `OR r`(opcode)
 //            in 0xB8u..0xBFu -> `CP r`()
@@ -136,6 +136,16 @@ class LR35902(
     // endregion
 
     // region Math Ops
+
+    private fun `AND r`(opcode: UInt) {
+        val offset = opcode % 8u
+        A = readRegisterBy(offset) and A
+
+        zeroBit = A == 0x0u.toUByte()
+        carryBit = false
+        halfCarryBit = true
+        subtractBit = false
+    }
 
     private fun `OR r`(opcode: UInt) {
         val offset = opcode % 8u

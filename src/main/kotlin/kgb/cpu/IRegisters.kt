@@ -1,5 +1,10 @@
 package best.william.kgb.cpu
 
+import sun.jvm.hotspot.code.CompressedStream.L
+import kotlin.reflect.KMutableProperty
+import kotlin.reflect.KProperty
+import kotlin.reflect.KProperty0
+
 @ExperimentalUnsignedTypes
 interface IRegisters: StatusBit.Holder {
     var A: UByte
@@ -10,11 +15,29 @@ interface IRegisters: StatusBit.Holder {
     var H: UByte
     var L: UByte
 
-    val BC: UShort
-        get() = asWord(C, B)
+    var AF: UShort
+        get() = asWord(A, statusRegister)
+        set(value) {
+            val valueInt = value.toUInt()
+            A = (valueInt shr 8).toUByte()
+            statusRegister = (valueInt and 0xFFu).toUByte()
+        }
 
-    val DE: UShort
+    var BC: UShort
+        get() = asWord(C, B)
+        set(value) {
+            val valueInt = value.toUInt()
+            B = (valueInt shr 8).toUByte()
+            C = (valueInt and 0xFFu).toUByte()
+        }
+
+    var DE: UShort
         get() = asWord(E, D)
+        set(value) {
+            val valueInt = value.toUInt()
+            D = (valueInt shr 8).toUByte()
+            E = (valueInt and 0xFFu).toUByte()
+        }
 
     var HL: UShort
         get() = asWord(L, H)

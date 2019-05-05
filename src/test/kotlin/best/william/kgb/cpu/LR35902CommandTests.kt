@@ -38,4 +38,76 @@ class LR35902CommandTests {
         assertEquals(0x2u.toUShort(), cpu.programCounter)
     }
 
+    @Test
+    fun `JR NZ, r8 should decrement the PC if not Z`() {
+
+        val memory = UByteArrayMemory(0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.programCounter = 0xAu
+        cpu.zeroBit = false
+
+        memory[0xAu] = 0x20u
+        memory[0xBu] = (-3).toUByte()
+
+        cpu.step()
+
+        assertEquals(0x9u.toUShort(), cpu.programCounter)
+
+    }
+
+    @Test
+    fun `JR NZ, r8 should increment the PC if not Z`() {
+
+        val memory = UByteArrayMemory(0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.programCounter = 0xAu
+        cpu.zeroBit = false
+
+        memory[0xAu] = 0x20u
+        memory[0xBu] = 0x03u
+
+        cpu.step()
+
+        assertEquals(0xFu.toUShort(), cpu.programCounter)
+
+    }
+
+    @Test
+    fun `JR NZ, r8 should do nothing the PC if Z`() {
+
+        val memory = UByteArrayMemory(0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.programCounter = 0xAu
+        cpu.zeroBit = true
+
+        memory[0xAu] = 0x20u
+        memory[0xBu] = (-3).toUByte()
+
+        cpu.step()
+
+        assertEquals(0xCu.toUShort(), cpu.programCounter)
+
+    }
+
+    @Test
+    fun `JR NZ, r8 should increment the PC if Z`() {
+
+        val memory = UByteArrayMemory(0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.programCounter = 0xAu
+        cpu.zeroBit = true
+
+        memory[0xAu] = 0x20u
+        memory[0xBu] = 0x03u
+
+        cpu.step()
+
+        assertEquals(0xCu.toUShort(), cpu.programCounter)
+
+    }
+
 }

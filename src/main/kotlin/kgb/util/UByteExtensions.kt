@@ -19,19 +19,28 @@ private val ubyteInvertedMasks: Array<UByte> = ubyteMasks.map { it.inv() }.toTyp
 
 @ExperimentalUnsignedTypes
 val UByte.Companion.masks
-        get() = ubyteMasks
+    get() = ubyteMasks
 
 @ExperimentalUnsignedTypes
 val UByte.Companion.invertedMasks
-        get() = ubyteInvertedMasks
+    get() = ubyteInvertedMasks
 
 @ExperimentalUnsignedTypes
 fun UByte.withBit(bit: Int, value: Boolean) =
-    if (value) {
-        this.or(ubyteMasks[bit])
-    } else {
-        this.and(ubyteInvertedMasks[bit])
-    }
+        if (value) {
+            this.or(ubyteMasks[bit])
+        } else {
+            this.and(ubyteInvertedMasks[bit])
+        }
 
 @ExperimentalUnsignedTypes
 fun UByte.bit(bit: Int): Boolean = this.and(ubyteMasks[bit]) == ubyteMasks[bit]
+
+@ExperimentalUnsignedTypes
+fun UByte.swapNibbles(): UByte {
+    val top = (this and 0xF0u) / 16u
+    val bottom = (this and 0x0Fu) * 16u
+
+    return  (top or bottom).toUByte()
+}
+

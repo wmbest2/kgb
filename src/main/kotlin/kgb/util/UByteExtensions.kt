@@ -2,17 +2,9 @@ package kgb.util
 
 @ExperimentalUnsignedTypes
 private val ubyteMasks: Array<UByte> = arrayOf(
-        1u,
-        2u,
-        4u,
-        8u,
-        16u,
-        32u,
-        64u,
-        128u
+        0x01u, 0x02u, 0x04u, 0x08u,
+        0x10u, 0x20u, 0x40u, 0x80u
 )
-
-
 
 @ExperimentalUnsignedTypes
 private val ubyteInvertedMasks: Array<UByte> = ubyteMasks.map { it.inv() }.toTypedArray()

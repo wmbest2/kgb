@@ -1,13 +1,10 @@
 package best.william.kgb.cpu
 import best.william.kgb.memory.IMemory
-import kgb.util.bit
-import kgb.util.highByte
-import kgb.util.lowByte
-import kgb.util.withBit
+import kgb.util.*
 
 @ExperimentalUnsignedTypes
 class LR35902(
-        private val memory: IMemory,
+        val memory: IMemory,
         registers: IRegisters = Registers()
 ): IRegisters by registers {
 
@@ -81,8 +78,8 @@ class LR35902(
             0x04u, 0x14u, 0x24u, 0x34u,
             0x0Cu, 0x1Cu, 0x2Cu, 0x3Cu -> `INC n`(opcode)
             0x0Bu, 0x1Bu, 0x2Bu, 0x3Bu -> `DEC nn`(opcode)
-//            0x05u, 0x15u, 0x25u, 0x35u,
-//            0x0Du, 0x1Du, 0x2Du, 0x3Du -> `DEC n`(opcode)
+            0x05u, 0x15u, 0x25u, 0x35u,
+            0x0Du, 0x1Du, 0x2Du, 0x3Du -> `DEC n`(opcode)
 //            in 0x80u..0x87u -> `ADD A, r`()
 //            in 0x88u..0x8Fu -> `ADC A, r`()
 //            in 0x90u..0x97u -> `SUB A, r`()
@@ -90,7 +87,8 @@ class LR35902(
             in 0xA0u..0xA7u -> `AND r`(opcode)
             in 0xA8u..0xAFu -> `XOR r`(opcode)
             in 0xB0u..0xB7u -> `OR r`(opcode)
-//            in 0xB8u..0xBFu -> `CP r`()
+            in 0xB8u..0xBFu -> `CP r`(opcode)
+            0xFEu -> `CP d8`()
 
             // Stack Operations
 //            0xC0u, 0xD0u, 0xC8u, 0xD8u -> `RET n`(opcode)
@@ -178,6 +176,21 @@ class LR35902(
         if (condition) {
             programCounter = address
         }
+    }
+
+    private fun compare(value: UByte) {
+        zeroBit = A == value
+        carryBit = A < value
+        halfCarryBit = (A and 0xFu) < (value and 0xFu)
+        subtractBit = true
+    }
+
+    private fun `CP r`(opcode: UInt) {
+        compare(readRegisterBy(opcode % 8u))
+    }
+
+    private fun `CP d8`() {
+        compare(memory[programCounter++])
     }
     // endregion
 
@@ -302,7 +315,6 @@ class LR35902(
         zeroBit = result == 0u.toUByte()
         halfCarryBit = original.bit(3) && !result.bit(3)
         subtractBit = false
-
     }
 
     private fun `DEC nn`(opcode: UInt) {
@@ -312,6 +324,36 @@ class LR35902(
             0x2Bu -> HL--
             0x3Bu -> stackPointer--
         }
+    }
+
+    private fun `DEC n`(opcode: UInt) {
+        val original = when (opcode) {
+            0x05u -> B
+            0x0Du -> C
+            0x15u -> D
+            0x1Du -> E
+            0x25u -> H
+            0x2Du -> L
+            0x35u -> memory[HL]
+            0x3Du -> A
+            else -> TODO()
+        }
+
+        val result = when (opcode) {
+            0x05u -> --B
+            0x0Du -> --C
+            0x15u -> --D
+            0x1Du -> --E
+            0x25u -> --H
+            0x2Du -> --L
+            0x35u -> --memory[HL]
+            0x3Du -> --A
+            else -> TODO()
+        }
+
+        zeroBit = result == 0u.toUByte()
+        halfCarryBit = original.bit(4) && !result.bit(4)
+        subtractBit = true
     }
 
     private fun `AND r`(opcode: UInt) {

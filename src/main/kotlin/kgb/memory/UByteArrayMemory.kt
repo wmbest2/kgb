@@ -5,8 +5,9 @@ import best.william.kgb.memory.IMemory
 @ExperimentalUnsignedTypes
 class UByteArrayMemory(
         override val maxAddressSpace: UInt,
-        private val internalMemory: UByteArray = UByteArray(maxAddressSpace.toInt())
+        data: UByteArray = UByteArray(maxAddressSpace.toInt())
 ): IMemory {
+    private val internalMemory = data.copyOf(maxAddressSpace.toInt())
 
     override fun set(position: UShort, value: UByte) {
         internalMemory[position.toInt()] = value

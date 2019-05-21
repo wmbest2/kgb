@@ -1,12 +1,18 @@
 package best.william.kgb.cpu
 
+import best.william.kgb.test.NanoStopwatch
 import kgb.memory.UByteArrayMemory
 import org.junit.Assert.assertEquals
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import kotlin.system.measureNanoTime
 
 @ExperimentalUnsignedTypes
 class LR35902XorTests {
+
+    @get:Rule
+    val stopwatch = NanoStopwatch()
 
     val memory = UByteArrayMemory(0xFFFFu)
     lateinit var cpu: LR35902
@@ -96,7 +102,10 @@ class LR35902XorTests {
 
 
     private fun testXor() {
-        cpu.step()
+        val time = measureNanoTime {
+            cpu.step()
+        }
+        println("Time for opcode $time")
         assertEquals(0x3Cu.toUByte(), cpu.A)
         assertEquals(false, cpu.zeroBit)
         assertEquals(false, cpu.subtractBit)

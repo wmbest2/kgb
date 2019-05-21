@@ -32,8 +32,7 @@ class LR35902(
             return
         }
 
-        val command = memory[programCounter++]
-        when(val opcode = command.toUInt()) {
+        when(val opcode = memory[programCounter++].toUInt()) {
             // Commands
             0x00u -> {}  // NoOp
 //            0x10u -> STOP()
@@ -99,24 +98,27 @@ class LR35902(
 
 
             // Bit Operations
-            0xCBu -> when (val cbOp = memory[programCounter++].toUInt()) {
-                in 0x00u..0x07u -> `RLC n`(cbOp)
-                in 0x08u..0x0Fu -> `RRC n`(cbOp)
-                in 0x10u..0x17u -> `RL n`(cbOp)
-                in 0x18u..0x1Fu -> `RR n`(cbOp)
+            0xCBu -> executeCB()
+            else -> TODO("Implement Opcode '${opcode.toString(16)}'\n${this}")
+        }
+
+    }
+
+    private fun executeCB() {
+        when (val cbOp = memory[programCounter++].toUInt()) {
+            in 0x00u..0x07u -> `RLC n`(cbOp)
+            in 0x08u..0x0Fu -> `RRC n`(cbOp)
+            in 0x10u..0x17u -> `RL n`(cbOp)
+            in 0x18u..0x1Fu -> `RR n`(cbOp)
 //                in 0x20u..0x27u -> `SLA n`(cbOp)
 //                in 0x28u..0x2Fu -> `SRA n`(cbOp)
 //                in 0x30u..0x37u -> `SWAP n`(cbOp)
 //                in 0x38u..0x3Fu -> `SRL n`(cbOp)
-                in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
-                in 0x80u..0xBFu -> `RES b, n`(cbOp)
-                in 0xC0u..0xFFu -> `SET b, n`(cbOp)
-                else -> TODO("Implement Opcode 'CB ${cbOp.toString(16)}'\n${this}")
-            }
-
-            else -> TODO("Implement Opcode '${opcode.toString(16)}'\n${this}")
+            in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
+            in 0x80u..0xBFu -> `RES b, n`(cbOp)
+            in 0xC0u..0xFFu -> `SET b, n`(cbOp)
+            else -> TODO("Implement Opcode 'CB ${cbOp.toString(16)}'\n${this}")
         }
-
     }
 
     //region Opcodes
@@ -157,7 +159,7 @@ class LR35902(
 
         val relativeAddress = memory[programCounter++]
         if (condition) {
-            programCounter = (programCounter.toInt() + relativeAddress.toByte()).toUShort()
+            programCounter = (programCounter.toShort() + relativeAddress.toByte()).toUShort()
         }
     }
 
@@ -259,13 +261,15 @@ class LR35902(
         A = memory[address]
     }
 
+    private val ldhTop: UShort = 0xFF00u
+
     private fun `LDH (a8), A`() {
-        val address = (0xFF00u + memory[programCounter++]).toUShort()
+        val address = ldhTop or memory[programCounter++].toUShort()
         memory[address] = A
     }
 
     private fun `LDH A, (a8)`() {
-        val address = (0xFF00u + memory[programCounter++]).toUShort()
+        val address = ldhTop or memory[programCounter++].toUShort()
         A = memory[address]
     }
 
@@ -288,17 +292,6 @@ class LR35902(
     }
 
     private fun `INC n`(opcode: UInt) {
-        val original = when (opcode) {
-            0x04u -> B
-            0x0Cu -> C
-            0x14u -> D
-            0x1Cu -> E
-            0x24u -> H
-            0x2Cu -> L
-            0x34u -> memory[HL]
-            0x3Cu -> A
-            else -> TODO()
-        }
 
         val result = when (opcode) {
             0x04u -> ++B
@@ -312,7 +305,9 @@ class LR35902(
             else -> TODO()
         }
 
-        zeroBit = result == 0u.toUByte()
+        val original = (result + 1u).toUByte()
+
+        zeroBit = result == UByte.ZERO
         halfCarryBit = original.bit(3) && !result.bit(3)
         subtractBit = false
     }
@@ -327,18 +322,6 @@ class LR35902(
     }
 
     private fun `DEC n`(opcode: UInt) {
-        val original = when (opcode) {
-            0x05u -> B
-            0x0Du -> C
-            0x15u -> D
-            0x1Du -> E
-            0x25u -> H
-            0x2Du -> L
-            0x35u -> memory[HL]
-            0x3Du -> A
-            else -> TODO()
-        }
-
         val result = when (opcode) {
             0x05u -> --B
             0x0Du -> --C
@@ -350,8 +333,9 @@ class LR35902(
             0x3Du -> --A
             else -> TODO()
         }
+        val original = (result + 1u).toUByte()
 
-        zeroBit = result == 0u.toUByte()
+        zeroBit = result == UByte.ZERO
         halfCarryBit = original.bit(4) && !result.bit(4)
         subtractBit = true
     }
@@ -360,7 +344,7 @@ class LR35902(
         val offset = opcode % 8u
         A = readRegisterBy(offset) and A
 
-        zeroBit = A == 0x0u.toUByte()
+        zeroBit = A == UByte.ZERO
         carryBit = false
         halfCarryBit = true
         subtractBit = false
@@ -368,9 +352,10 @@ class LR35902(
 
     private fun `XOR r`(opcode: UInt) {
         val offset = opcode % 8u
-        A = readRegisterBy(offset) xor A
+        val value = readRegisterBy(offset) xor A
+        A = value
 
-        zeroBit = A == 0x0u.toUByte()
+        zeroBit = value == UByte.ZERO
         carryBit = false
         halfCarryBit = false
         subtractBit = false
@@ -380,7 +365,7 @@ class LR35902(
         val offset = opcode % 8u
         A = readRegisterBy(offset) or A
 
-        zeroBit = A == 0x0u.toUByte()
+        zeroBit = A == UByte.ZERO
         carryBit = false
         halfCarryBit = false
         subtractBit = false
@@ -404,7 +389,7 @@ class LR35902(
         writeRegisterBy(offset, output)
         carryBit = value.bit(8)
         if (setZero)
-            zeroBit = output == 0x0u.toUByte()
+            zeroBit = output == UByte.ZERO
     }
 
     private fun `RLC n`(opcode: UInt, setZero: Boolean = true) {
@@ -415,7 +400,7 @@ class LR35902(
         writeRegisterBy(offset, output)
         carryBit = value.bit(8)
         if (setZero)
-            zeroBit = output == 0x0u.toUByte()
+            zeroBit = output == UByte.ZERO
     }
 
     private fun `RR n`(opcode: UInt, setZero: Boolean = true) {
@@ -429,7 +414,7 @@ class LR35902(
         writeRegisterBy(offset, output)
         carryBit = oldZero
         if (setZero)
-            zeroBit = output == 0x0u.toUByte()
+            zeroBit = output == UByte.ZERO
     }
 
     private fun `RRC n`(opcode: UInt, setZero: Boolean = true) {
@@ -443,7 +428,7 @@ class LR35902(
         writeRegisterBy(offset, output)
         carryBit = oldZero
         if (setZero)
-            zeroBit = output == 0x0u.toUByte()
+            zeroBit = output == UByte.ZERO
     }
 
     private fun `BIT b, n`(opcode: UInt) {

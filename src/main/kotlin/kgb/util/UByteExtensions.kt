@@ -26,7 +26,10 @@ fun UByte.withBit(bit: Int, value: Boolean) =
         }
 
 @ExperimentalUnsignedTypes
-fun UByte.bit(bit: Int): Boolean = this.and(ubyteMasks[bit]) == ubyteMasks[bit]
+fun UByte.bit(bit: Int): Boolean {
+    val mask = ubyteMasks[bit]
+    return this.and(mask) == mask
+}
 
 @ExperimentalUnsignedTypes
 fun UByte.swapNibbles(): UByte {
@@ -36,3 +39,6 @@ fun UByte.swapNibbles(): UByte {
     return  (top or bottom).toUByte()
 }
 
+@ExperimentalUnsignedTypes
+val UByte.Companion.ZERO: UByte
+    get() = 0u

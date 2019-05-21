@@ -18,7 +18,7 @@ class StatusBitTest: StatusBit.Holder {
 
     @Test
     fun `Verify Status bits read correctly`() {
-        statusRegister = "10101010".toUByte(radix = 2)
+        statusRegister = 0xAAu // 10101010
         assertFalse(sb1)
         assertTrue(sb2)
         assertFalse(sb4)
@@ -28,7 +28,7 @@ class StatusBitTest: StatusBit.Holder {
         assertFalse(sb64)
         assertTrue(sb128)
         
-        statusRegister = "01010101".toUByte(radix = 2)
+        statusRegister = 0x55u // 01010101
         assertTrue(sb1)
         assertFalse(sb2)
         assertTrue(sb4)

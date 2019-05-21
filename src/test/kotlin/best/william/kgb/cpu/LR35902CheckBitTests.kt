@@ -5,22 +5,26 @@ import kgb.util.masks
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import kotlin.system.measureNanoTime
+import kotlin.system.measureTimeMillis
 
 @ExperimentalUnsignedTypes
 class LR35902CheckBitTests {
 
     val memory = UByteArrayMemory(0x7FFFu)
-    lateinit var cpu: LR35902
+    var cpu = LR35902(memory)
 
     @Before
     fun setup() {
-        cpu = LR35902(memory)
         cpu.programCounter = 0x0u
 
         memory[0u] = 0xCBu
 
         // Give HL an address to use
-        cpu.HL = 0x123u
+        val time = measureNanoTime {
+            cpu.HL = 0x123u
+        }
+        println("Time to reset HL $time nanos")
     }
 
     @Test

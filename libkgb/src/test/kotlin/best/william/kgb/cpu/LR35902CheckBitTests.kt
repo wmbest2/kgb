@@ -6,7 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import kotlin.system.measureNanoTime
-import kotlin.system.measureTimeMillis
 
 @ExperimentalUnsignedTypes
 class LR35902CheckBitTests {

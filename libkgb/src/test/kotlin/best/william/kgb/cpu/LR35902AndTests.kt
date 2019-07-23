@@ -8,7 +8,7 @@ import org.junit.Test
 @ExperimentalUnsignedTypes
 class LR35902AndTests {
 
-    val memory = UByteArrayMemory(0xFFFFu)
+    val memory = UByteArrayMemory(0x0u..0xFFFFu)
     lateinit var cpu: LR35902
 
     @Before

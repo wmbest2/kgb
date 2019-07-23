@@ -5,33 +5,18 @@ import best.william.kgb.memory.IMemory
 @ExperimentalUnsignedTypes
 class MemoryMapper(private vararg val memoryChunks: IMemory): IMemory {
 
-    constructor(memoryChunks: List<IMemory>): this(memoryChunks = *memoryChunks.toTypedArray())
+    private val firstChunk = memoryChunks.minBy { it.addressRange.first }!!
+    private val lastChunk = memoryChunks.maxBy { it.addressRange.last }!!
 
-    override val maxAddressSpace: UInt = memoryChunks.sumBy {
-        it.maxAddressSpace.toInt()
-    }.toUInt()
-
-    private val positions: UIntArray
-
-    init {
-        val list = mutableListOf(0u)
-        var last = 0u
-        for (memory in memoryChunks) {
-            list.add(last + memory.maxAddressSpace)
-            last = memory.maxAddressSpace
-        }
-        positions = list.toUIntArray()
-    }
+    override val addressRange: UIntRange = firstChunk.addressRange.first..lastChunk.addressRange.last
 
     override fun set(position: UShort, value: UByte) {
-        val index = positions.indexOfLast { position > it }
-        val memory = memoryChunks[index]
-        memory[(position - positions[index]).toUShort()] = value
+        val memory = memoryChunks.firstOrNull { it.addressRange.contains(position.toUInt()) } ?: return
+        memory[position] = value
     }
 
     override fun get(position: UShort): UByte {
-        val index = positions.indexOfLast { position > it }
-        val memory = memoryChunks[index]
-        return memory[(position - positions[index]).toUShort()]
+        val memory = memoryChunks.firstOrNull { it.addressRange.contains(position.toUInt()) } ?: return 0u
+        return memory[position]
     }
 }

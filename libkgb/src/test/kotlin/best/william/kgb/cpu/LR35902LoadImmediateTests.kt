@@ -7,7 +7,7 @@ import org.junit.Test
 @ExperimentalUnsignedTypes
 class LR35902LoadImmediateTests {
 
-    val memory = UByteArrayMemory(0xFFFFu)
+    val memory = UByteArrayMemory(0x0u..0xFFFFu)
     val cpu = LR35902(memory)
 
     @Test

@@ -1,8 +1,9 @@
 package best.william.kgb.cpu
 
 @ExperimentalUnsignedTypes
-interface IRegisters: StatusBit.Holder {
+interface IRegisters {
     var A: UByte
+    var F: UByte
     var B: UByte
     var C: UByte
     var D: UByte
@@ -11,10 +12,10 @@ interface IRegisters: StatusBit.Holder {
     var L: UByte
 
     var AF: UShort
-        get() = asWord(A, statusRegister)
+        get() = asWord(A, F)
         set(value) {
             A = (value / 256u).toUByte()
-            statusRegister = (value and 0xFFu).toUByte()
+            F = (value and 0xFFu).toUByte()
         }
 
     var BC: UShort
@@ -48,7 +49,7 @@ data class Registers(
         override var E: UByte = 0u,
         override var H: UByte = 0u,
         override var L: UByte = 0u,
-        override var statusRegister: UByte = 0u
+        override var F: UByte = 0u
 ): IRegisters
 
 @ExperimentalUnsignedTypes

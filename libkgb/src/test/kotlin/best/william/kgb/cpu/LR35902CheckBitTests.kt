@@ -10,7 +10,7 @@ import kotlin.system.measureNanoTime
 @ExperimentalUnsignedTypes
 class LR35902CheckBitTests {
 
-    val memory = UByteArrayMemory(0x7FFFu)
+    val memory = UByteArrayMemory(0x0u..0xFFFFu)
     var cpu = LR35902(memory)
 
     @Before

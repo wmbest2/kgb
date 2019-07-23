@@ -9,7 +9,7 @@ class LR35902JumpTests {
 
     @Test
     fun `Verify 0xC3 jump command moves program counter to correct address`() {
-        val memory = UByteArrayMemory(0xFFFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFFFu)
         val cpu = LR35902(memory)
         memory[0u] = 0xC3u // JMP to
         memory[1u] = 0x05u // 0x__05

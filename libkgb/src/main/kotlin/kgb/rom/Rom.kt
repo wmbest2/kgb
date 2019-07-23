@@ -4,12 +4,16 @@ import best.william.kgb.memory.IMemory
 import kgb.memory.UByteArrayMemory
 import java.io.File
 
+interface Cartridge {
+    val rom: IMemory
+    val ram: IMemory
+}
+
 @ExperimentalUnsignedTypes
 sealed class Rom(
         val name: String
 ): IMemory {
-    override val maxAddressSpace: UInt
-        get() = 0x8000u // Max addressable space by a cartridge
+    override val addressRange: UIntRange = 0x0u..0x7FFFu
 }
 
 @ExperimentalUnsignedTypes
@@ -17,7 +21,7 @@ class RomOnly(
         bytes: ByteArray,
         name: String
 ): Rom(name) {
-    private val rom = UByteArrayMemory(maxAddressSpace, bytes.toUByteArray())
+    private val rom = UByteArrayMemory(addressRange, bytes.toUByteArray())
 
     override fun set(position: UShort, value: UByte) {
         // READ ONLY
@@ -45,12 +49,9 @@ class MBC3(
     }
 
     val selectedBank = 0
-    val rom = UByteArrayMemory(maxAddressSpace, bytes.toUByteArray())
+    val rom = UByteArrayMemory(addressRange, bytes.toUByteArray())
     val banks = bytes.toList()
             .chunked(0x8000)
-            .map {
-                UByteArrayMemory(it.size.toUInt(), it.toByteArray().toUByteArray())
-            }
 }
 
 @ExperimentalUnsignedTypes

@@ -1,18 +1,18 @@
 package best.william.kgb.cpu
 import best.william.kgb.memory.IMemory
+import kgb.cpu.InterruptProvider
 import kgb.util.*
 
 @ExperimentalUnsignedTypes
 class LR35902(
         val memory: IMemory,
         registers: IRegisters = Registers()
-): IRegisters by registers {
-
+): IRegisters by registers, InterruptProvider {
     // region Status Bits
-    var zeroBit by flag(7)
-    var subtractBit by flag(6)
-    var halfCarryBit by flag(5)
-    var carryBit by flag(4)
+    var zeroBit by flag(::F, 7)
+    var subtractBit by flag(::F, 6)
+    var halfCarryBit by flag(::F, 5)
+    var carryBit by flag(::F, 4)
     // endregion
 
     // region Registers
@@ -52,7 +52,8 @@ class LR35902(
 
             // Load Immediate 8bit value
             0x06u, 0x0Eu, 0x16u,
-            0x1Eu, 0x26u, 0x2Eu, 0x3Eu -> `LD n, d8`(opcode)
+            0x1Eu, 0x26u, 0x2Eu,
+            0x36u, 0x3Eu -> `LD n, d8`(opcode)
 
             //Load Registers
             0xEAu -> `LD (a16), A`()
@@ -73,33 +74,39 @@ class LR35902(
             0x17u -> RLA()
             0x0Fu -> RRCA()
             0x1Fu -> RRA()
+            0x2Fu -> CPL()
             0x03u, 0x13u, 0x23u, 0x33u -> `INC nn`(opcode)
             0x04u, 0x14u, 0x24u, 0x34u,
             0x0Cu, 0x1Cu, 0x2Cu, 0x3Cu -> `INC n`(opcode)
             0x0Bu, 0x1Bu, 0x2Bu, 0x3Bu -> `DEC nn`(opcode)
             0x05u, 0x15u, 0x25u, 0x35u,
             0x0Du, 0x1Du, 0x2Du, 0x3Du -> `DEC n`(opcode)
-//            in 0x80u..0x87u -> `ADD A, r`()
-//            in 0x88u..0x8Fu -> `ADC A, r`()
+            in 0x80u..0x87u -> `ADD A, r`(opcode)
+            in 0x88u..0x8Fu -> `ADC A, r`(opcode)
 //            in 0x90u..0x97u -> `SUB A, r`()
 //            in 0x98u..0x97u -> `SBC A, r`()
             in 0xA0u..0xA7u -> `AND r`(opcode)
             in 0xA8u..0xAFu -> `XOR r`(opcode)
             in 0xB0u..0xB7u -> `OR r`(opcode)
             in 0xB8u..0xBFu -> `CP r`(opcode)
+            0xE6u -> `AND d8`()
+            0xF6u -> `OR d8`()
             0xFEu -> `CP d8`()
 
             // Stack Operations
-//            0xC0u, 0xD0u, 0xC8u, 0xD8u -> `RET n`(opcode)
+            0xC9u -> RET()
+            0xC0u, 0xD0u, 0xC8u, 0xD8u -> `RET cc`(opcode)
             0xC1u, 0xD1u, 0xE1u, 0xF1u -> `POP nn`(opcode)
             0xC5u, 0xD5u, 0xE5u, 0xF5u -> `PUSH nn`(opcode)
             0xC4u, 0xD4u,
             0xCCu, 0xCDu, 0xDCu -> `CALL n, a16`(opcode)
+            0xC7u, 0xD7u, 0xE7u, 0xF7u,
+            0xCFu, 0xDFu, 0xEFu, 0xFFu -> `RST nn`(opcode)
 
 
             // Bit Operations
             0xCBu -> executeCB()
-            else -> TODO("Implement Opcode '${opcode.toString(16)}'\n${this}")
+            else -> TODO("Implement Opcode '${opcode.toString(16)}' ${opcode.toUByte().toAssemblyString()}\n${this}")
         }
 
     }
@@ -112,7 +119,7 @@ class LR35902(
             in 0x18u..0x1Fu -> `RR n`(cbOp)
 //                in 0x20u..0x27u -> `SLA n`(cbOp)
 //                in 0x28u..0x2Fu -> `SRA n`(cbOp)
-//                in 0x30u..0x37u -> `SWAP n`(cbOp)
+            in 0x30u..0x37u -> `SWAP n`(cbOp)
 //                in 0x38u..0x3Fu -> `SRL n`(cbOp)
             in 0x40u..0x7Fu -> `BIT b, n`(cbOp)
             in 0x80u..0xBFu -> `RES b, n`(cbOp)
@@ -167,10 +174,10 @@ class LR35902(
     private fun `JP n, a16`(opcode: UInt) {
         val condition = when(opcode) {
             0xC3u -> true // JP a16
-            0xC0u -> !zeroBit
-            0xD0u -> !carryBit
-            0xC8u -> zeroBit
-            0xD8u -> carryBit
+            0xC2u -> !zeroBit
+            0xD2u -> !carryBit
+            0xCAu -> zeroBit
+            0xDAu -> carryBit
             else -> false
         }
 
@@ -208,6 +215,7 @@ class LR35902(
             0x1eu -> E = value
             0x26u -> H = value
             0x2eu -> L = value
+            0x36u -> memory[HL] = value
         }
     }
 
@@ -305,7 +313,7 @@ class LR35902(
             else -> TODO()
         }
 
-        val original = (result + 1u).toUByte()
+        val original = (result - 1u).toUByte()
 
         zeroBit = result == UByte.ZERO
         halfCarryBit = original.bit(3) && !result.bit(3)
@@ -340,9 +348,60 @@ class LR35902(
         subtractBit = true
     }
 
+    private fun `ADD A, r`(opcode: UInt) {
+        val offset = opcode % 8u
+        val original = A
+        val operand = readRegisterBy(offset)
+        val result = original + operand
+        A = result.toUByte()
+        zeroBit = A == UByte.ZERO
+        carryBit = result.bit(8)
+        halfCarryBit =  (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) > 0xFu
+        subtractBit = false
+    }
+
+    private fun `ADC A, r`(opcode: UInt) {
+        val offset = opcode % 8u
+        val carry = if (carryBit) 1u else 0u
+        val original = A
+        val operand = readRegisterBy(offset)
+        val result = original + operand + carry
+        A = result.toUByte()
+        zeroBit = A == UByte.ZERO
+        carryBit = result.bit(8)
+        halfCarryBit =  (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) + carry > 0xFu
+        subtractBit = false
+    }
+
+    private fun `SUB A, r`(opcode: UInt) {
+        val offset = opcode % 8u
+        val result = A - readRegisterBy(offset)
+        A = result.toUByte()
+        zeroBit = A == UByte.ZERO
+        carryBit = result.bit(7)
+        halfCarryBit = result.bit(3)
+        subtractBit = true
+    }
+
+
+    private fun CPL() {
+        subtractBit = true
+        halfCarryBit = true
+        A = A.inv()
+    }
+
     private fun `AND r`(opcode: UInt) {
         val offset = opcode % 8u
         A = readRegisterBy(offset) and A
+
+        zeroBit = A == UByte.ZERO
+        carryBit = false
+        halfCarryBit = true
+        subtractBit = false
+    }
+
+    private fun `AND d8`() {
+        A = memory[programCounter++] and A
 
         zeroBit = A == UByte.ZERO
         carryBit = false
@@ -364,6 +423,16 @@ class LR35902(
     private fun `OR r`(opcode: UInt) {
         val offset = opcode % 8u
         A = readRegisterBy(offset) or A
+
+        zeroBit = A == UByte.ZERO
+        carryBit = false
+        halfCarryBit = false
+        subtractBit = false
+    }
+
+
+    private fun `OR d8`() {
+        A = memory[programCounter++] or A
 
         zeroBit = A == UByte.ZERO
         carryBit = false
@@ -431,6 +500,18 @@ class LR35902(
             zeroBit = output == UByte.ZERO
     }
 
+    private fun `SWAP n`(opcode: UInt) {
+        val offset = opcode % 8u
+
+        val value = readRegisterBy(offset).swapNibbles()
+        writeRegisterBy(offset, value)
+        carryBit = false
+        halfCarryBit = false
+        zeroBit = value == UByte.ZERO
+        subtractBit = false
+
+    }
+
     private fun `BIT b, n`(opcode: UInt) {
         val offset = opcode % 8u
         val bit = (opcode - 0x40u) / 8u
@@ -454,6 +535,25 @@ class LR35902(
     //endregion
 
     //region Stack Operations
+
+    private fun `RST nn`(opcode: UInt) {
+        val address: UShort = when(opcode) {
+            0xC7u -> 0x00u
+            0xD7u -> 0x10u
+            0xE7u -> 0x20u
+            0xF7u -> 0x30u
+            0xCFu -> 0x08u
+            0xDFu -> 0x18u
+            0xEFu -> 0x28u
+            0xFFu -> 0x38u
+            else -> TODO("Should be exhaustive")
+        }
+
+        memory[stackPointer--] = programCounter.highByte
+        memory[stackPointer--] = programCounter.lowByte
+
+        programCounter = address
+    }
 
     private fun `CALL n, a16`(opcode: UInt) {
         val condition = when(opcode) {
@@ -490,7 +590,7 @@ class LR35902(
     }
 
     private fun `POP nn`(opcode: UInt) {
-        val value = asWord(memory[stackPointer++], memory[stackPointer++])
+        val value = asWord(memory[++stackPointer], memory[++stackPointer])
 
         when (opcode) {
             0xC1u -> BC = value
@@ -500,6 +600,22 @@ class LR35902(
             else -> TODO()
         }
 
+    }
+
+    private fun RET() {
+        programCounter = asWord(memory[++stackPointer], memory[++stackPointer])
+    }
+
+    private fun `RET cc`(opcode: UInt) {
+        val condition = when(opcode) {
+            0xC0u -> !zeroBit
+            0xD0u -> !carryBit
+            0xC8u -> zeroBit
+            0xD8u -> carryBit
+            else -> false
+        }
+        if (condition)
+            RET()
     }
 
     //endregion
@@ -554,7 +670,7 @@ class LR35902(
         return """
             registers [
                 A: 0x${A.toString(16)},
-                F: 0x${statusRegister.toString(16)},
+                F: 0x${F.toString(16)},
                 B: 0x${B.toString(16)},
                 C: 0x${C.toString(16)},
                 D: 0x${D.toString(16)},
@@ -566,4 +682,9 @@ class LR35902(
             SP: 0x${stackPointer.toString(16)}
         """.trimIndent()
     }
+
+    override fun requestInterrupt(interruptID: Int) {
+
+    }
+
 }

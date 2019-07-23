@@ -36,7 +36,7 @@ fun UByte.toAssemblyString(): String {
 
         // Load Immediate 8bit value
         0x06u, 0x0Eu, 0x16u,
-        0x1Eu, 0x26u, 0x2Eu, 0x3Eu -> "LD n, d8"
+        0x1Eu, 0x26u, 0x2Eu, 0x36u, 0x3Eu -> "LD n, d8"
 
         //Load Registers
         0xEAu -> "LD (a16), A"
@@ -71,6 +71,8 @@ fun UByte.toAssemblyString(): String {
         in 0xA8u..0xAFu -> "XOR r"
         in 0xB0u..0xB7u -> "OR r"
         in 0xB8u..0xBFu -> "CP r"
+        0xE6u -> "AND d8"
+        0xF6u -> "OR d8"
         0xFEu -> "CP d8"
 
         // Stack Operations
@@ -79,12 +81,16 @@ fun UByte.toAssemblyString(): String {
         0xC5u, 0xD5u, 0xE5u, 0xF5u -> "PUSH nn"
         0xC4u, 0xD4u,
         0xCCu, 0xCDu, 0xDCu -> "CALL n, a16"
+        0xC9u -> "RET"
+        0x2Fu -> "CPL"
+        0xC7u, 0xD7u, 0xE7u, 0xF7u,
+        0xCFu, 0xDFu, 0xEFu, 0xFFu -> "RST nn"
 
 
         // Bit Operations
         0xCBu -> "See CB Table"
 
-        else -> TODO("Implement Opcode '${this.toString(16)}'\n${this}")
+        else -> TODO("Implement Opcode '${this.toString(16)}'\n")
     }
 }
 

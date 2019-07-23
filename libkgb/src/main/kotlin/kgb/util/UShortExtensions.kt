@@ -38,8 +38,8 @@ val UShort.bytes
 
 @ExperimentalUnsignedTypes
 val UShort.highByte
-    get() = ((this.toUInt() and 0xF0u) shr 8).toUByte()
+    get() = ((this.toUInt() and 0xFF00u) shr 8).toUByte()
 
 @ExperimentalUnsignedTypes
 val UShort.lowByte
-    get() = (this and 0x0Fu.toUShort()).toUByte()
+    get() = (this and 0x00FFu.toUShort()).toUByte()

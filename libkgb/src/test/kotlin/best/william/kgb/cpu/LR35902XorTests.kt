@@ -14,7 +14,7 @@ class LR35902XorTests {
     @get:Rule
     val stopwatch = NanoStopwatch()
 
-    val memory = UByteArrayMemory(0xFFFFu)
+    val memory = UByteArrayMemory(0x0u..0xFFFFu)
     lateinit var cpu: LR35902
 
     @Before

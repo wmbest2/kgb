@@ -10,7 +10,7 @@ class LR35902CommandTests {
     @Test
     fun `NoOp just increments the counter`() {
 
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         cpu.programCounter = 0x0u
@@ -21,7 +21,7 @@ class LR35902CommandTests {
 
     @Test
     fun `Halt (0x76) should stop operations until interrupt occurs`() {
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         memory[0x1u] = 0x76u
@@ -41,7 +41,7 @@ class LR35902CommandTests {
     @Test
     fun `JR NZ, r8 should decrement the PC if not Z`() {
 
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         cpu.programCounter = 0xAu
@@ -59,7 +59,7 @@ class LR35902CommandTests {
     @Test
     fun `JR NZ, r8 should increment the PC if not Z`() {
 
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         cpu.programCounter = 0xAu
@@ -77,7 +77,7 @@ class LR35902CommandTests {
     @Test
     fun `JR NZ, r8 should do nothing the PC if Z`() {
 
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         cpu.programCounter = 0xAu
@@ -95,7 +95,7 @@ class LR35902CommandTests {
     @Test
     fun `JR NZ, r8 should increment the PC if Z`() {
 
-        val memory = UByteArrayMemory(0xFFu)
+        val memory = UByteArrayMemory(0x0u..0xFFu)
         val cpu = LR35902(memory)
 
         cpu.programCounter = 0xAu

@@ -1,7 +1,12 @@
 package kgb.memory
 
 @ExperimentalUnsignedTypes
-class MemoryMapper(private vararg val _memoryChunks: IMemory): IMemory {
+class MemoryMapper(
+    private val boot: IMemory,
+    vararg _memoryChunks: IMemory
+): IMemory {
+
+    private var bootEnabled = true
 
     private val memoryChunks = _memoryChunks.sortedBy { it.addressRange.first }
 
@@ -11,11 +16,17 @@ class MemoryMapper(private vararg val _memoryChunks: IMemory): IMemory {
     override val addressRange: UIntRange = firstChunk.addressRange.first..lastChunk.addressRange.last
 
     override fun set(position: UShort, value: UByte) {
+        if (bootEnabled && position == 0xFF50u.toUShort()) bootEnabled = false
+        if (bootEnabled && position < 0x0100u.toUShort()) {
+            boot.set(position, value)
+            return
+        }
         val memory = memoryChunks.find { it.addressRange.contains(position.toUInt()) } ?: return
         memory.set(position, value)
     }
 
     override fun get(position: UShort): UByte {
+        if (bootEnabled && position < 0x0100u.toUShort()) return boot[position] // Boot ROM disabled
         val memory = memoryChunks.find { it.addressRange.contains(position.toUInt()) } ?: return 0u
         return memory.get(position)
     }

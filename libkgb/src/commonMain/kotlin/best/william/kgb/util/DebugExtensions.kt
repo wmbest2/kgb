@@ -1,6 +1,9 @@
+@file:OptIn(kotlin.ExperimentalUnsignedTypes::class)
 package kgb.util
 
 import best.william.kgb.cpu.LR35902
+
+fun UByte.toAssemblyString() = toUInt().toAssemblyString()
 
 @ExperimentalUnsignedTypes
 fun LR35902.debugCurrentOperation() {
@@ -14,13 +17,11 @@ fun LR35902.debugCurrentOperation() {
         } else {
             val cbCmd = memory.get((pc + 1u).toUShort())
             append("CB ").append(cbCmd.toString(16).padStart(2, '0')).append(' ')
-            append(cbCmd.toCBAssemblyString())
+            append(cbCmd.toUInt().toCBAssemblyString())
         }
     }
     println(out)
 }
-
-fun UByte.toAssemblyString() = toUInt().toAssemblyString()
 
 @ExperimentalUnsignedTypes
 fun UInt.toAssemblyString(): String {
@@ -48,6 +49,9 @@ fun UInt.toAssemblyString(): String {
         0x1Eu, 0x26u, 0x2Eu, 0x36u, 0x3Eu -> "LD n, d8"
 
         //Load Registers
+        0x08u -> "LD (a16), SP"
+        0xF8u -> "LD HL, SP+r8"
+        0xF9u -> "LD SP, HL"
         0xEAu -> "LD (a16), A"
         0xFAu -> "LD A, (a16)"
         0xE2u -> "LD (C), A"
@@ -76,17 +80,21 @@ fun UInt.toAssemblyString(): String {
         in 0x88u..0x8Fu -> "ADC A, r"
         0x19u -> "ADD HL DE"
         0xC6u -> "ADD A, d8"
+        0xCEu -> "ADC A, d8"
         0xE8u -> "ADD SP, r8"
         0x29u -> "ADD HL HL"
         in 0x90u..0x97u -> "SUB A, r"
         in 0x98u..0x99u -> "SBC A, r"
+        0xd6u -> "SUB A, d8"
         in 0xA0u..0xA7u -> "AND r"
         in 0xA8u..0xAFu -> "XOR r"
+        0xEEu -> "XOR d8"
         in 0xB0u..0xB7u -> "OR r"
         in 0xB8u..0xBFu -> "CP r"
         0xE6u -> "AND d8"
         0xF6u -> "OR d8"
         0xFEu -> "CP d8"
+
 
         // Stack Operations
         0xC0u, 0xD0u, 0xC8u, 0xD8u -> "RET n"
@@ -101,15 +109,15 @@ fun UInt.toAssemblyString(): String {
 
 
         // Bit Operations
-        0xCBu -> "See CB Table"
+        0xCBu -> this.toCBAssemblyString()
 
         else -> TODO("Implement Opcode '${this.toString(16)}'\n")
     }
 }
 
 @ExperimentalUnsignedTypes
-fun UByte.toCBAssemblyString(): String {
-    return when (this.toUInt()) {
+fun UInt.toCBAssemblyString(): String {
+    return when (this) {
         in 0x00u..0x07u -> "RLC n"
         in 0x08u..0x0Fu -> "RRC n"
         in 0x10u..0x17u -> "RL n"

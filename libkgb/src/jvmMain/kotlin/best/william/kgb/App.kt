@@ -2,7 +2,9 @@ package best.william.kgb
 
 import best.william.kgb.rom.loadAsRom
 import kgb.lcd.LCD
+import kgb.lcd.LCDRenderer
 import kgb.memory.IORegisters
+import kgb.memory.InterruptEnabledMemory
 import kgb.memory.MemoryMapper
 import kgb.memory.UByteArrayMemory
 import java.io.File
@@ -12,24 +14,57 @@ import best.william.kgb.cpu.LR35902 as CPU
 @ExperimentalTime
 @ExperimentalUnsignedTypes
 fun main() {
-    val rom = File("../reference/roms/tetris.gb").loadAsRom()
-    val lcd = LCD {
+    val bootRomBytes = File("../reference/DMG_ROM.bin").readBytes().toUByteArray()
+    val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
+    // Rom range: 0x0100 to 0x7FFF
+    // Optional Rom Bank 0x8000 to 0x9FFF
+    val rom = File("../reference/roms/cpu_instrs.gb").loadAsRom()
 
-    }
-    val ioRegisters = IORegisters(lcd)
+    val vram = UByteArrayMemory(0x8000u..0x9FFFu)
+    // Optional Switchable RAM Bank 0xA000 to 0xBFFF
     val ram = UByteArrayMemory(0xC000u..0xDFFFu)
-    val memoryMap = MemoryMapper(rom, ram, ioRegisters)
-//    val memoryMap = GBMemoryMap(rom)
+    val oam = UByteArrayMemory(0xFE00u..0xFE9Fu) // OAM memory for sprites
+
+    // I/O Registers 0xFF00 to 0xFF7F
+    val ioRegisters = IORegisters()
+
+    // Unused memory 0xFF80 to 0xFFFE
+    // This is typically used for high RAM (HRAM) and is not directly accessible by the CPU,
+    // but can be used for temporary storage or flags.
+    val hram = UByteArrayMemory(0xFF80u..0xFFFEu)
+    val interruptEnabledMemory = InterruptEnabledMemory()
+
+    val memoryMap = MemoryMapper(
+        bootRom, // Boot ROM is usually only used for the first few cycles
+        rom, // Main ROM 0x0000 to 0x7FFF
+        vram, // Video RAM 0x8000 to 0x9FFF
+        ram,
+        oam,
+        ioRegisters,
+        hram,
+        interruptEnabledMemory
+    )
+
+    val lcd = LCD(memoryMap, object : LCDRenderer {
+        override fun render(pixels: UByteArray) {
+
+        }
+    })
+
     val cpu = CPU(memoryMap)
+
+    ioRegisters.attachInterruptRegisters(cpu)
+    interruptEnabledMemory.attachInterruptRegisters(cpu)
+    ioRegisters.attachLCD(lcd)
+
     lcd.interruptProvider = cpu
-    cpu.programCounter = 0x100u
 
     println("Running ${rom.name}")
 
     try {
         while (true) {
-            cpu.step(true)
-            lcd.update(4u)
+            val cycles = cpu.step()
+            lcd.update(cycles)
         }
     } catch (e: Exception) {
         println(e.printStackTrace())

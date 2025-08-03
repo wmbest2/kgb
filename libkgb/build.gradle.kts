@@ -49,7 +49,16 @@ kotlin {
                 implementation("org.jetbrains.kotlin:kotlin-test")
             }
         }
-        val jvmMain by getting
+        val jvmMain by getting {
+            dependencies {
+                implementation("org.lwjgl:lwjgl:3.3.3")
+                implementation("org.lwjgl:lwjgl-glfw:3.3.3")
+                implementation("org.lwjgl:lwjgl-opengl:3.3.3")
+                runtimeOnly("org.lwjgl:lwjgl:3.3.3:natives-windows")
+                runtimeOnly("org.lwjgl:lwjgl-glfw:3.3.3:natives-windows")
+                runtimeOnly("org.lwjgl:lwjgl-opengl:3.3.3:natives-windows")
+            }
+        }
         val jvmTest by getting
         val nativeMain by getting
         val nativeTest by getting

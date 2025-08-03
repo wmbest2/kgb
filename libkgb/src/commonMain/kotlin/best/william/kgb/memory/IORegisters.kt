@@ -70,8 +70,8 @@ class IORegisters: IMemory {
         // LCD registers
         0xFF40u -> lcd?.LCDC = value
         0xFF41u -> lcd?.STAT = value
-        0xFF42u -> lcd?.scrollX = value
-        0xFF43u -> lcd?.scrollY = value
+        0xFF42u -> lcd?.scrollY = value
+        0xFF43u -> lcd?.scrollX = value
         0xFF44u -> lcd?.LY = value
         0xFF45u -> lcd?.LYC = value
         0xFF46u -> lcd?.DMA = value
@@ -98,10 +98,16 @@ class IORegisters: IMemory {
         // LCD registers
         0xFF40u -> lcd?.LCDC ?: 0u
         0xFF41u -> lcd?.STAT ?: 0u
-        0xFF42u -> lcd?.scrollX ?: 0u
-        0xFF43u -> lcd?.scrollY ?: 0u
+        0xFF42u -> lcd?.scrollY ?: 0u
+        0xFF43u -> lcd?.scrollX ?: 0u
         0xFF44u -> lcd?.LY ?: 0u
         0xFF45u -> lcd?.LYC ?: 0u
+        0xFF46u -> lcd?.DMA ?: 0u
+        0xFF47u -> lcd?.BGP ?: 0u
+        0xFF48u -> lcd?.OBP0 ?: 0u
+        0xFF49u -> lcd?.OBP1 ?: 0u
+        0xFF4Au -> lcd?.WY ?: 0u
+        0xFF4Bu -> lcd?.WX ?: 0u
         0xFF50u -> BANK // This is the boot ROM disable register
         // Sound registers and others can be stubbed
         in 0xFF10u..0xFF3Fu -> 0u // Sound stub

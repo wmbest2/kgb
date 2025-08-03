@@ -82,6 +82,7 @@ fun UInt.toAssemblyString(): String {
         0xC6u -> "ADD A, d8"
         0xCEu -> "ADC A, d8"
         0xE8u -> "ADD SP, r8"
+        0x39u -> "ADD HL SP"
         0x29u -> "ADD HL HL"
         in 0x90u..0x97u -> "SUB A, r"
         in 0x98u..0x99u -> "SBC A, r"
@@ -103,10 +104,10 @@ fun UInt.toAssemblyString(): String {
         0xC4u, 0xD4u,
         0xCCu, 0xCDu, 0xDCu -> "CALL n, a16"
         0xC9u -> "RET"
+        0xD9u -> "RETI"
         0x2Fu -> "CPL"
         0xC7u, 0xD7u, 0xE7u, 0xF7u,
         0xCFu, 0xDFu, 0xEFu, 0xFFu -> "RST nn"
-
 
         // Bit Operations
         0xCBu -> this.toCBAssemblyString()

@@ -11,10 +11,10 @@ interface IRegisters {
     var L: UByte
 
     var AF: UShort
-        get() = asWord(F, A)
+        get() = asWord(F and 0xF0u, A)
         set(value) {
             A = (value.toUInt() shr 8).toUByte()
-            F = (value and 0xFFu).toUByte()
+            F = (value and 0xF0u).toUByte()
         }
 
     var BC: UShort

@@ -1,6 +1,7 @@
 package kgb.memory
 
 import kgb.memory.IMemory
+import kgb.util.debug
 
 @ExperimentalUnsignedTypes
 class UByteArrayMemory(
@@ -14,10 +15,13 @@ class UByteArrayMemory(
     }
 
     override fun set(position: UShort, value: UByte) {
-        internalMemory[(position - addressRange.first).toInt()] = value
+        internalMemory[(position - addressRange.start).toInt()] = value
     }
 
     override fun get(position: UShort): UByte {
-        return internalMemory[(position - addressRange.first).toInt()]
+        if (position !in addressRange) {
+            throw IndexOutOfBoundsException("Position ${position.toHexString()} is out of bounds for UByteArrayMemory with range ${addressRange.debug}")
+        }
+        return internalMemory[(position - addressRange.start).toInt()]
     }
 }

@@ -23,7 +23,7 @@ class LR35902(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Info,
+            minSeverity = Severity.Warn,
         ),
         tag= "LR35902"
     )
@@ -37,7 +37,7 @@ class LR35902(
     // endregion
 
     // region Registers
-    var stackPointer: UShort = 0x0000u // Starts at 0xFFFE
+    var stackPointer: UShort = 0xFFFEu // FIXED: should start at 0xFFFE, not 0x0000
     var programCounter: UShort = 0x0000u // Starts at 0x0000
     // endregion
 
@@ -52,6 +52,17 @@ class LR35902(
 
     private val interruptVectors = listOf(0x40u, 0x48u, 0x50u, 0x58u, 0x60u)
 
+    private fun pushStack(value: UShort) {
+        memory[--stackPointer] = value.highByte
+        memory[--stackPointer] = value.lowByte
+    }
+
+    private fun popStack(): UShort {
+        val low = memory[stackPointer++]
+        val high = memory[stackPointer++]
+        return asWord(low, high)
+    }
+
     private fun handleInterrupts() {
         val ie = IE
         var iflags = IF
@@ -63,8 +74,7 @@ class LR35902(
                 // Clear IF flag for this interrupt
                 IF = iflags and mask.inv()
                 // Push PC to stack
-                memory[--stackPointer] = programCounter.highByte
-                memory[--stackPointer] = programCounter.lowByte
+                pushStack(programCounter)
                 // Jump to interrupt vector
                 programCounter = interruptVectors[i].toUShort()
                 break
@@ -172,12 +182,13 @@ class LR35902(
             0x0Du, 0x1Du, 0x2Du, 0x3Du -> `DEC n`(opcode)
             in 0x80u..0x87u -> `ADD A r`(opcode)
             in 0x88u..0x8Fu -> `ADC A r`(opcode)
-            0x19u -> `ADD HL DE`()
-            0x29u -> `ADD HL HL`()
+            0x09u, 0x19u, 0x29u, 0x39u -> `ADD HL rr`(opcode)
             0xC6u -> `ADD A d8`()
             0xCEu -> `ADC A d8`()
+            0xE8u -> `ADD SP r8`()
             in 0x90u..0x97u -> `SUB A r`(opcode)
             in 0x98u..0x9Fu -> `SBC A r`(opcode)
+            0xDEu -> `SBC A d8`()
             0xD6u -> `SUB d8`()
             in 0xA0u..0xA7u -> `AND r`(opcode)
             in 0xA8u..0xAFu -> `XOR r`(opcode)
@@ -188,8 +199,11 @@ class LR35902(
             0xF6u -> `OR d8`()
             0xFEu -> `CP d8`()
 
+            0x27u -> DAA() // Decimal Adjust for Addition
+
             // Stack Operations
             0xC9u -> RET()
+            0xD9u -> RETI()
             0xC0u, 0xD0u, 0xC8u, 0xD8u -> `RET cc`(opcode)
             0xC1u, 0xD1u, 0xE1u, 0xF1u -> `POP nn`(opcode)
             0xC5u, 0xD5u, 0xE5u, 0xF5u -> `PUSH nn`(opcode)
@@ -265,12 +279,12 @@ class LR35902(
         }
         val relativeAddress = memory[programCounter++]
         if (condition) {
-            programCounter = (programCounter.toShort() + relativeAddress.toByte()).toUShort()
+            programCounter = (programCounter.toInt() + relativeAddress.toByte()).toUShort()
+            logger.v { "JR condition: $condition, PC: ${programCounter.toString(16)}" }
         }
-        logger.v { "JR condition: $condition, PC: ${programCounter.toString(16)}" }
         return when (opcode) {
             0x18u -> 12 // JR r8
-            0x20u, 0x30u, 0x28u, 0x38u -> 8 // JR cc r8
+            0x20u, 0x30u, 0x28u, 0x38u -> if (condition) 12 else 8 // FIXED: conditional timing
             else -> throw IllegalArgumentException("Invalid JR opcode: $opcode")
         }
     }
@@ -321,6 +335,32 @@ class LR35902(
         return 4
     }
     // endregion
+
+    private fun DAA(): Int {
+        var result = A.toUInt()
+
+        if (!subtractBit) {
+            if (halfCarryBit || (result and 0x0Fu) > 9u) {
+                result += 0x06u
+            }
+            if (carryBit || result > 0x99u) { // Fixed condition
+                result += 0x60u
+            }
+        } else {
+            if (halfCarryBit) {
+                result -= 0x06u
+            }
+            if (carryBit) {
+                result -= 0x60u
+            }
+        }
+
+        A = result.toUByte()
+        zeroBit = A == UByte.ZERO
+        halfCarryBit = false
+        carryBit = result.bit(8)
+        return 4 // DAA takes 4 cycles
+    }
 
     // region Load Ops
 
@@ -540,16 +580,22 @@ class LR35902(
         return 4 // ADC A, r
     }
 
-    private fun `ADD HL DE`(): Int {
+    private fun `ADD HL rr`(opcode: UInt): Int {
         val original = HL
-        val operand = DE
+        val operand = when (opcode) {
+            0x09u -> BC
+            0x19u -> DE
+            0x29u -> HL
+            0x39u -> stackPointer
+            else -> throw IllegalArgumentException("Invalid ADD HL opcode: $opcode")
+        }
         val result = original + operand
         HL = result.toUShort()
-        zeroBit = false // HL is never zero
-        carryBit = result.bit(16)
+        // FIXED: ADD HL doesn't affect zero flag, only affects N, H, C
         halfCarryBit = (original and 0x0FFFu) + (operand and 0x0FFFu) > 0x0FFFu
+        carryBit = result.bit(16)
         subtractBit = false
-        return 8 // ADD HL, DE
+        return 8 // ADD HL, rr
     }
 
     private fun `ADD A d8`(): Int {
@@ -577,6 +623,17 @@ class LR35902(
         return 8 // ADC A, d8
     }
 
+    private fun `ADD SP r8`(): Int {
+        val offset = memory[programCounter++].toByte()
+        val result = (stackPointer.toInt() + offset).toUShort()
+        stackPointer = result
+        zeroBit = false // SP is never zero
+        carryBit = result.bit(16)
+        halfCarryBit = (stackPointer and 0x0FFFu) + (offset.toUInt() and 0x0FFFu) > 0x0FFFu
+        subtractBit = false
+        return 12 // ADD SP, r8
+    }
+
     private fun `SUB A r`(opcode: UInt): Int {
         val offset = opcode % 8u
         val operand = readRegisterBy(offset)
@@ -592,16 +649,24 @@ class LR35902(
 
     private fun `SBC A r`(opcode: UInt): Int {
         val offset = opcode % 8u
-        val operand = readRegisterBy(offset)
+        sbc(readRegisterBy(offset))
+        return 4 // SBC A, r
+    }
+
+    private fun `SBC A d8`(): Int {
+        sbc(memory[programCounter++])
+        return 8 // SBC A, d8
+    }
+
+    private fun sbc(value: UByte) {
         val carry = if (carryBit) 1u else 0u
         val original = A
-        val result = original - operand - carry
+        val result = original - value - carry
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
-        carryBit = original < (operand + carry).toUByte()
-        halfCarryBit = ((original.toUInt() xor operand.toUInt() xor result) and 0x10u) != 0u
+        carryBit = original < (value + carry).toUByte()
+        halfCarryBit = ((original.toUInt() xor value.toUInt() xor result) and 0x10u) != 0u
         subtractBit = true
-        return 4 // SBC A, r
     }
 
     private fun `SUB d8`(): Int {
@@ -694,33 +759,37 @@ class LR35902(
 
     // These commands are similar to the bit commands so we can just overload them
     private fun RLA() = `RL n`(0x17u, false)
-    private fun RLCA() = `RL n`(0x07u, false)
-    private fun RRA() = `RL n`(0x1Fu, false)
-    private fun RRCA() = `RL n`(0x0Fu, false)
+    private fun RLCA() = `RLC n`(0x07u, false)
+    private fun RRA() = `RR n`(0x1Fu, false)
+    private fun RRCA() = `RRC n`(0x0Fu, false)
 
     private fun `RL n`(opcode: UInt, setZero: Boolean = true): Int {
         val offset = opcode % 8u
 
         val value = readRegisterBy(offset).toUInt() shl 1
-        val output = value.withBit(0, value.bit(8)).toUByte() // Shift left setting the 0 bit to the old 7 bit value
+        val output = value.withBit(0, carryBit).toUByte() // Shift left setting the 0 bit to the old 7 bit value
         writeRegisterBy(offset, output)
         carryBit = value.bit(8)
-        if (setZero)
+        if (setZero) {
             logger.v { "Setting zeroBit for opcode $opcode to ${output == UByte.ZERO}" }
             zeroBit = output == UByte.ZERO
+        }
         return 8 // RL n
     }
 
     private fun `RLC n`(opcode: UInt, setZero: Boolean = true): Int {
         val offset = opcode % 8u
 
-        val value = readRegisterBy(offset).toUInt() shl 1
-        val output = value.withBit(0, carryBit).toUByte() // Shift left setting the 0 bit to the carryBit
+        val registerData = readRegisterBy(offset)
+        val oldBitSeven = registerData.bit(7)
+        val value = registerData.toUInt() shl 1
+        val output = value.withBit(0, oldBitSeven).toUByte() // Rotate left, bit 7 goes to bit 0
         writeRegisterBy(offset, output)
-        carryBit = value.bit(8)
-        if (setZero)
+        carryBit = oldBitSeven // Carry flag is set to the old bit 7
+        if (setZero) {
             logger.v { "Setting zeroBit for RLC to ${output == UByte.ZERO}" }
             zeroBit = output == UByte.ZERO
+        }
         return 8 // RLC n
     }
 
@@ -731,7 +800,7 @@ class LR35902(
         val oldZero = registerData.bit(0)
         val value = registerData.toUInt() shr 1
 
-        val output = value.withBit(7, oldZero).toUByte() // Shift left setting the 0 bit to the old 7 bit value
+        val output = value.withBit(7, carryBit).toUByte() // Shift right setting the 0 bit to the old 7 bit value
         writeRegisterBy(offset, output)
         carryBit = oldZero
         if (setZero)
@@ -746,7 +815,7 @@ class LR35902(
         val oldZero = registerData.bit(0)
         val value = registerData.toUInt() shr 1
 
-        val output = value.withBit(7, carryBit).toUByte() // Shift left setting the 0 bit to the carryBit
+        val output = value.withBit(7, oldZero).toUByte() // Shift right setting the 0 bit to the carryBit
         writeRegisterBy(offset, output)
         carryBit = oldZero
         if (setZero)
@@ -851,8 +920,7 @@ class LR35902(
             else -> TODO("Should be exhaustive")
         }
 
-        memory[stackPointer--] = programCounter.highByte
-        memory[stackPointer--] = programCounter.lowByte
+        pushStack(programCounter)
 
         programCounter = address
         return 16 // RST nn
@@ -871,8 +939,7 @@ class LR35902(
         val jumpAddress = asWord(memory[programCounter++], memory[programCounter++])
 
         if (condition) {
-            memory[stackPointer--] = programCounter.highByte
-            memory[stackPointer--] = programCounter.lowByte
+            pushStack(programCounter)
 
             programCounter = jumpAddress
             return 24 // CALL taken
@@ -889,13 +956,12 @@ class LR35902(
             else -> TODO()
         }
         logger.d { "PUSH: stackPointer=${stackPointer.toHexString()} value=${value.toHexString()}" }
-        memory[stackPointer--] = value.highByte
-        memory[stackPointer--] = value.lowByte
+        pushStack(value)
         return 16 // PUSH nn
     }
 
     private fun `POP nn`(opcode: UInt): Int {
-        val value = asWord(memory[++stackPointer], memory[++stackPointer])
+        val value = popStack()
 
         when (opcode) {
             0xC1u -> BC = value
@@ -908,8 +974,13 @@ class LR35902(
     }
 
     private fun RET(): Int {
-        programCounter = asWord(memory[++stackPointer], memory[++stackPointer])
+        programCounter = popStack()
         return 16 // RET
+    }
+
+    private fun RETI(): Int {
+        interruptsEnabled = true
+        return RET() // RETI is just a RET with interrupts enabled
     }
 
     private fun `RET cc`(opcode: UInt): Int {
@@ -995,17 +1066,4 @@ class LR35902(
     override fun requestInterrupt(interruptID: Int) {
         IF = IF or ((1u shl interruptID).toUByte())
     }
-
-    private fun `ADD HL HL`(): Int {
-        val hl = HL.toUInt()
-        val result = hl + hl
-        // Half carry: if carry from bit 11
-        halfCarryBit = ((hl and 0xFFFu) + (hl and 0xFFFu)) > 0xFFFu
-        // Carry: if carry from bit 15
-        carryBit = result > 0xFFFFu
-        subtractBit = false
-        HL = result.toUShort()
-        return 8 // 8 cycles
-    }
-
 }

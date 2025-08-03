@@ -40,3 +40,6 @@ fun UInt.byte(position: Int): UByte {
     val bitOffset = position * 8
     return ((this shr bitOffset) and 0xFFu).toUByte()
 }
+
+val UIntRange.debug
+    get() = "0x${start.toString(16).padStart(4, '0')}..0x${endInclusive.toString(16).padStart(4, '0')}"

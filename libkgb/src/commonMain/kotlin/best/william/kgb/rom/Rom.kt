@@ -13,6 +13,7 @@ interface Cartridge {
 sealed class Rom(
         val name: String
 ): IMemory {
+
     override val addressRange: UIntRange = 0x0000u..0x7FFFu
     override fun set(position: UShort, value: UByte) {
         // ROMs are read-only, so this should not be called
@@ -36,6 +37,7 @@ class MBC1(
         val ram: Boolean = false,
         val battery: Boolean = false
 ): Rom(name) {
+
     override fun get(position: UShort): UByte {
         if (position < 0x8000u) {
             return rom[position]
@@ -49,7 +51,31 @@ class MBC1(
     val selectedBank = 0
     val rom = UByteArrayMemory(addressRange, bytes.toUByteArray())
     val banks = bytes.toList()
-            .chunked(0x4000)
+            .chunked(0x8000)
+            .map { it.toByteArray() }
+
+    val bankMemory: IMemory
+        get() = object : IMemory {
+            override val addressRange: UIntRange
+                get() = 0xA000u..0xBFFFu
+
+            override fun set(position: UShort, value: UByte) {
+                if (position in 0xA000u..0xBFFFu && ram) {
+                    banks[selectedBank][(position - 0xA000u).toInt()] = value.toInt().toByte()
+                } else {
+                    throw IllegalArgumentException("Invalid write to ROM: $name at position $position")
+                }
+            }
+
+            override fun get(position: UShort): UByte {
+                return if (position in 0xA000u..0xBFFFu && ram) {
+                    banks[selectedBank][(position - 0xA000u).toInt()].toUByte()
+                } else {
+                    throw IllegalArgumentException("Invalid read from ROM: $name at position $position")
+                }
+            }
+
+        }
 }
 
 @ExperimentalUnsignedTypes

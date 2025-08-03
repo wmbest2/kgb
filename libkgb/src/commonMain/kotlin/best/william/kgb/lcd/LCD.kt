@@ -9,7 +9,6 @@ import co.touchlab.kermit.loggerConfigInit
 import co.touchlab.kermit.platformLogWriter
 import kgb.cpu.InterruptProvider
 import kgb.memory.IMemory
-import kgb.memory.UByteArrayMemory
 import kgb.util.bit
 import kotlin.collections.chunked
 
@@ -27,10 +26,12 @@ class LCD(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Debug,
+            minSeverity = Severity.Warn,
         ),
         tag = "LCD"
     )
+
+    private val lineBuffer = UByteArray(160)
 
     var interruptProvider: InterruptProvider? = null
     // region Status Flags
@@ -48,7 +49,7 @@ class LCD(
 
     // region LCD Control
 
-    var LCDC: UByte = 91u
+    var LCDC: UByte = 91u // 0b01011011
     val LCDEnabled by flag(::LCDC, 7)
     val WindowTileMapSelect by flag(::LCDC, 6)
     val WindowEnabled by flag(::LCDC, 5)
@@ -65,14 +66,14 @@ class LCD(
     var scrollY: UByte = 0u
     var LY: UByte = 0u
     var LYC: UByte = 0u
+    var _dma: UByte = 0u // Backing field for DMA register, not used directly
     var DMA: UByte
-        get() = memory[0xFF46u]
+        get() = _dma
         set(value) {
             logger.d { "DMA transfer initiated with value: $value" }
-            memory[0xFF46u] = value
             val startAddress = (value.toInt() shl 8) and 0xFF00
             for (i in 0 until 160) {
-                memory.set((0xFE00u + i.toUInt()).toUShort(), memory[(startAddress + i).toUShort()])
+                memory[(0xFE00u + i.toUInt()).toUShort()] = memory[(startAddress + i).toUShort()]
             }
         }
     var BGP: UByte = 0u
@@ -89,7 +90,7 @@ class LCD(
     private fun drawScanline() {
         val line = LY
         if (line !in 0u until 144u) return
-        val pixels = UByteArray(160)
+        val pixels = lineBuffer
         // --- Background/Window ---
         if (BGWindowEnabled) {
             for (x in 0u until 160u) {
@@ -111,26 +112,38 @@ class LCD(
                 val tileMapY = scrolledY / 8u
                 val tileMapOffset = tileMapBase + (tileMapY * 32u + tileMapX)
                 val tileIndex = memory[tileMapOffset.toUShort()]
-                val tileNum = if (tileDataBase == 0x8000u) tileIndex else (tileIndex.toInt() xor 0x80).toUByte()
+                logger.v {
+                    "BG/Window: line=$line x=$x useWindow=$useWindow tileMapBase=${tileMapBase.toString(16)} scrolledX=$scrolledX scrolledY=$scrolledY tileMapOffset=${tileMapOffset.toString(16)} tileIndex=$tileIndex"
+                }
+                val tileNum = if (tileDataBase == 0x8000u) tileIndex else (tileIndex.toShort() + 128).toUShort().toUByte()
                 val tileAddr = tileDataBase + (tileNum * 16u)
                 val pixelY = scrolledY % 8u
                 val byte1 = memory[(tileAddr + (pixelY * 2u)).toUShort()]
                 val byte2 = memory[(tileAddr + (pixelY * 2u + 1u)).toUShort()]
-                val pixelX = 7u - (scrolledX % 8u)
-                val colorNum = (((byte2.toUInt() shr pixelX.toInt()) and 1u) shl 1) or ((byte1.toUInt() shr pixelX.toInt()) and 1u)
-                val shade = ((BGP.toInt() shr (colorNum.toInt() * 2)) and 0b11).toUByte()
-                if (x == 0u) {
-                    logger.v { "line=$line BGP=$BGP tileIndex=$tileIndex tileNum=$tileNum byte1=$byte1 byte2=$byte2" }
+                val pixelX = scrolledX  % 8u
+                val bit = 7 - pixelX.toByte()
+                val colorNum = (((byte2.toInt() shr bit) and 1) shl 1) or ((byte1.toInt() shr bit) and 1)
+                val shade = ((BGP.toInt() shr (colorNum * 2)) and 0b11).toUByte()
+                if (line.toInt() == 16) {
+                    logger.v {
+                        "BG: line=$line x=$x tileMapOffset=${tileMapOffset.toString(16)} tileIndex=$tileIndex tileNum=$tileNum tileAddr=${
+                            tileAddr.toString(
+                                16
+                            )
+                        } pixelY=$pixelY pixelX=$pixelX colorNum=$colorNum shade=$shade"
+                    }
                 }
+
                 pixels[x.toInt()] = shade
             }
         }
         // --- Sprites ---
         if (OBJEnabled) {
+            logger.i { "Drawing sprites for line $line" }
             val spriteHeight = if (OBJSize) 16u else 8u
             val spritesOnLine = mutableListOf<Pair<UInt, UInt>>() // Pair: OAM index, X
             for (i in 0u until 40u) {
-                val base = (i * 4u).toUShort()
+                val base = ((i * 4u) + 0xFE00u).toUShort()
                 val spriteY = memory[base] - 16u
                 val spriteX = memory[(base + 1u).toUShort()] - 8u
                 if (line in spriteY until (spriteY + spriteHeight)) {
@@ -139,10 +152,10 @@ class LCD(
                 }
             }
             for ((i, spriteX) in spritesOnLine) {
-                val base = (i * 4u).toUShort()
+                val base = ((i * 4u) + 0xFE00u).toUShort()
                 val spriteY = memory[base] - 16u
-                val tileIndex = memory[(base + 2u).toUShort()]
-                val flags = memory[(base + 3u).toUShort()]
+                val tileIndex = memory[(base + 1u).toUShort()]
+                val flags = memory[(base + 2u).toUShort()]
                 val yFlip = flags.bit(6)
                 val xFlip = flags.bit(5)
                 val palette = if (flags.bit(4)) OBP1 else OBP0
@@ -161,6 +174,7 @@ class LCD(
                     if (!priority || pixels[screenX.toInt()].toUInt() == 0u) {
                         pixels[screenX.toInt()] = shade
                     }
+                    logger.w { "Sprite: OAM index=$i spriteX=$spriteX spriteY=$spriteY tileIndex=$tileIndex pixelY=$pixelY xFlip=$xFlip yFlip=$yFlip colorNum=$colorNum shade=$shade" }
                 }
             }
 
@@ -176,6 +190,43 @@ class LCD(
 
     fun renderScreen() {
         logger.i { "VBLANK: Rendering screen" }
+        logger.i {
+            """
+            ┌─────────────────────────────┐
+            │ Rendering screen: 160x144   │
+            ├─────────────────────────────┤
+            │ Pixel buffer size: ${pixelBuffer.size} bytes
+            │
+            │ ── OTHER Flags ─────────────
+            │ LCDC:                   $LCDC
+            │ BGP:                    $BGP
+            │ OBP0:                   $OBP0
+            │ OBP1:                   $OBP1
+            │ Scroll X:              $scrollX
+            │ Scroll Y:              $scrollY
+            │ LYC:                   $LYC
+            │ WY:                    $WY
+            │ WX:                    $WX
+            │ ── LCDC Flags ──────────────
+            │ LCD Enabled:           $LCDEnabled
+            │ Window Tile Map Select:$WindowTileMapSelect
+            │ Window Enabled:        $WindowEnabled
+            │ BG/Window Tile Data:   $BGWindowTileDataSelect
+            │ BG Tile Map Select:    $BGTileMapSelect
+            │ OBJ Size:              $OBJSize
+            │ OBJ Enabled:           $OBJEnabled
+            │ BG/Window Enabled:     $BGWindowEnabled
+            │
+            │ ── STAT Flags ──────────────
+            │ LYC Interrupt Enable:  $LYCInterruptEnable
+            │ OAM Interrupt Enable:  $OAMInterruptEnable
+            │ VBlank Interrupt Enable:$VBlankInterruptEnable
+            │ HBlank Interrupt Enable:$HBlankInterruptEnable
+            │ LY Coincident:         $LYCoincident
+            │ Mode:                  $mode
+            └─────────────────────────────┘
+            """.trimIndent()
+        }
         renderer.render(pixelBuffer)
         // Render all pixels as ASCII for debugging
         val asciiShades = arrayOf(' ', '░', '▒', '▓')
@@ -184,7 +235,7 @@ class LCD(
                 asciiShades[shade.toInt()].toString()
             }
         }.forEach {
-            logger.d("SCREEN: $it")
+            logger.v("SCREEN: $it")
         }
     }
 
@@ -196,7 +247,7 @@ class LCD(
         // LY=LYC coincidence
         val lyCoincidenceNow = LY == LYC
         if (lyCoincidenceNow != LYCoincident) {
-            // Update LYCoincident flag
+            // Update LYCoincidence flag
             STAT = if (lyCoincidenceNow) STAT or 0x04u else STAT and 0xFBu
             // Request STAT interrupt if enabled
             if (LYCInterruptEnable && lyCoincidenceNow) {
@@ -217,26 +268,24 @@ class LCD(
         scanlineCounter -= cycles
 
         if (scanlineCounter <= 0) {
-            val currentLine = (++LY).toUInt()
             scanlineCounter += 456
+            val currentLine = (LY++).toUInt()
 
             checkAndRequestSTATInterrupt()
 
             when {
                 currentLine < 144u -> {
-                    logger.v { "Drawing scanline $currentLine" }
+                    logger.v { "Drawing scanline $LY" }
                     drawScanline()
                 }
                 currentLine == 144u -> {
-                    logger.i { "VBLANK interrupt requested at scanline $currentLine" }
-                    drawScanline()
+                    logger.i { "VBLANK interrupt requested at scanline $LY" }
                     interruptProvider?.requestInterrupt(0) // VBLANK
                     renderScreen() // Render the whole screen at VBLANK
                 }
                 currentLine > 153u -> {
-                    logger.v { "Resetting LY to 0 after scanline $currentLine" }
+                    logger.v { "Resetting LY to 0 after scanline $LY" }
                     LY = 0u
-                    drawScanline()
                 }
             }
         }

@@ -1,5 +1,6 @@
 package best.william.kgb
 
+import best.william.kgb.memory.MemoryMirror
 import best.william.kgb.rom.loadAsRom
 import kgb.lcd.LCD
 import kgb.lcd.LCDRenderer
@@ -18,7 +19,9 @@ fun main() {
     val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
     // Rom range: 0x0100 to 0x7FFF
     // Optional Rom Bank 0x8000 to 0x9FFF
-    val rom = File("../reference/roms/cpu_instrs.gb").loadAsRom()
+    //val rom = File("../reference/roms/test/cpu_instrs/individual/01-special.gb").loadAsRom()
+    val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
+    //val rom = File("../reference/roms/tetris.gb").loadAsRom()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
     // Optional Switchable RAM Bank 0xA000 to 0xBFFF
@@ -39,17 +42,15 @@ fun main() {
         rom, // Main ROM 0x0000 to 0x7FFF
         vram, // Video RAM 0x8000 to 0x9FFF
         ram,
+        MemoryMirror(0xE000u..0xFDFFu, ram),
         oam,
         ioRegisters,
         hram,
         interruptEnabledMemory
     )
 
-    val lcd = LCD(memoryMap, object : LCDRenderer {
-        override fun render(pixels: UByteArray) {
-
-        }
-    })
+    val renderer = best.william.kgb.lcd.LWJGLRenderer()
+    val lcd = LCD(memoryMap, renderer)
 
     val cpu = CPU(memoryMap)
 
@@ -62,12 +63,15 @@ fun main() {
     println("Running ${rom.name}")
 
     try {
-        while (true) {
+        while (!renderer.shouldClose()) {
+            // Emulate CPU cycles and update LCD
             val cycles = cpu.step()
             lcd.update(cycles)
         }
     } catch (e: Exception) {
         println(e.printStackTrace())
         println(cpu)
+    } finally {
+        renderer.dispose()
     }
 }

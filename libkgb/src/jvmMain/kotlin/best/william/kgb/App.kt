@@ -19,8 +19,8 @@ fun main() {
     val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
     // Rom range: 0x0100 to 0x7FFF
     // Optional Rom Bank 0x8000 to 0x9FFF
-    //val rom = File("../reference/roms/test/cpu_instrs/individual/01-special.gb").loadAsRom()
-    val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
+    val rom = File("../reference/roms/test/cpu_instrs/individual/11-op a,(hl).gb").loadAsRom()
+    // val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
     //val rom = File("../reference/roms/tetris.gb").loadAsRom()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)

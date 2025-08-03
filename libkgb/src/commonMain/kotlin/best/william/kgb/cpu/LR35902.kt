@@ -320,7 +320,9 @@ class LR35902(
     private fun compare(value: UByte): Int {
         zeroBit = A == value
         carryBit = A < value
-        halfCarryBit = ((A xor value) and ((A - value).toUByte()) and 0x10u) != 0u.toUByte()
+        // For subtraction, half-carry is set when there's a borrow from bit 4
+        // This happens when the lower nibble of A is less than the lower nibble of value
+        halfCarryBit = (A and 0x0Fu) < (value and 0x0Fu)
         subtractBit = true
         return 4
     }
@@ -343,19 +345,19 @@ class LR35902(
             if (halfCarryBit || (result and 0x0Fu) > 9u) {
                 result += 0x06u
             }
-            if (carryBit || result > 0x99u) { // Fixed condition
+            if (carryBit || result > 0x9Fu) {
                 result += 0x60u
             }
         } else {
             if (halfCarryBit) {
-                result -= 0x06u
+                result = (result - 0x06u) and 0xFFu
             }
             if (carryBit) {
                 result -= 0x60u
             }
         }
 
-        A = result.toUByte()
+        A = (result and 0xFFu).toUByte()
         zeroBit = A == UByte.ZERO
         halfCarryBit = false
         carryBit = result.bit(8)
@@ -423,12 +425,18 @@ class LR35902(
 
     private fun `LD HL, SP+r8`(): Int {
         val offset = memory[programCounter++].toByte()
-        val result = (stackPointer.toInt() + offset).toUInt()
+        val originalSP = stackPointer
+        val result = (originalSP.toInt() + offset).toUInt()
         HL = result.toUShort()
-        zeroBit = false // HL is never zero
-        carryBit = result.bit(16)
-        halfCarryBit = (stackPointer and 0x0FFFu) + (offset.toUInt() and 0x0FFFu) > 0x0FFFu
+
+        // LD HL, SP+r8 always clears Z and N flags
+        zeroBit = false
         subtractBit = false
+
+        // Carry and half-carry are calculated based on the lower bytes
+        carryBit = (originalSP and 0xFFu) + (offset.toUInt() and 0xFFu) > 0xFFu
+        halfCarryBit = (originalSP and 0x0Fu) + (offset.toUInt() and 0x0Fu) > 0x0Fu
+
         return 12 // LD HL, SP+r8
     }
 
@@ -548,8 +556,11 @@ class LR35902(
         val original = (result + 1u).toUByte()
 
         zeroBit = result == UByte.ZERO
-        halfCarryBit = original.bit(4) && !result.bit(4)
+        // For DEC, half-carry is set when there's a borrow from bit 4
+        // This happens when the lower nibble of the original value is 0
+        halfCarryBit = (original and 0x0Fu) == 0u.toUByte()
         subtractBit = true
+
         return 8 // DEC n
     }
 
@@ -625,13 +636,20 @@ class LR35902(
 
     private fun `ADD SP r8`(): Int {
         val offset = memory[programCounter++].toByte()
-        val result = (stackPointer.toInt() + offset).toUShort()
-        stackPointer = result
-        zeroBit = false // SP is never zero
-        carryBit = result.bit(16)
-        halfCarryBit = (stackPointer and 0x0FFFu) + (offset.toUInt() and 0x0FFFu) > 0x0FFFu
+        val originalSP = stackPointer
+        val result = (originalSP.toInt() + offset).toUInt()
+
+        stackPointer = result.toUShort()
+
+        // ADD SP r8 always clears Z and N flags
+        zeroBit = false
         subtractBit = false
-        return 12 // ADD SP, r8
+
+        // Carry and half-carry are calculated based on the lower bytes
+        carryBit = (originalSP and 0xFFu) + (offset.toUInt() and 0xFFu) > 0xFFu
+        halfCarryBit = (originalSP and 0x0Fu) + (offset.toUInt() and 0x0Fu) > 0x0Fu
+
+        return 16 // ADD SP, r8
     }
 
     private fun `SUB A r`(opcode: UInt): Int {
@@ -664,19 +682,21 @@ class LR35902(
         val result = original - value - carry
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
-        carryBit = original < (value + carry).toUByte()
-        halfCarryBit = ((original.toUInt() xor value.toUInt() xor result) and 0x10u) != 0u
+        carryBit = original.toUInt() < result
+        // For subtraction, half-carry is set when there's a borrow from bit 4
+        halfCarryBit = (original and 0x0Fu) < ((value and 0x0Fu) + carry.toUByte())
         subtractBit = true
     }
 
     private fun `SUB d8`(): Int {
         val operand = memory[programCounter++]
         val original = A
-        val result = original - operand
+        val result = original.toUInt() - operand.toUInt()
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
         carryBit = original < operand
-        halfCarryBit = ((original.toUInt() xor operand.toUInt() xor result) and 0x10u) != 0u
+        // For subtraction, half-carry is set when there's a borrow from bit 4
+        halfCarryBit = (original and 0x0Fu) < (operand and 0x0Fu)
         subtractBit = true
         return 8 // SUB d8
     }

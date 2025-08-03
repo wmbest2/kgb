@@ -51,8 +51,15 @@ data class Registers(
         override var E: UByte = 0u,
         override var H: UByte = 0u,
         override var L: UByte = 0u,
-        override var F: UByte = 0u
-): IRegisters
+        var _F: UByte = 0u
+): IRegisters {
+
+    override var F: UByte
+        get() = _F and 0xF0u // Keep only the upper nibble
+        set(value) {
+            _F = value and 0xF0u // Keep only the upper nibble
+        }
+}
 
 fun asWord(low: UByte, high: UByte) =
     (((high.toUInt() shl 8) or low.toUInt()).toUShort())

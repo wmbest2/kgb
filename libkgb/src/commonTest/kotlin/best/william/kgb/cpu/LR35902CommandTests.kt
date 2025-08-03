@@ -205,4 +205,45 @@ class LR35902CommandTests {
         cpu.step() // Execute DAA
         assertEquals(0x15u.toUByte(), cpu.A) // Adjusted value
     }
+
+    @Test
+    fun `DAA Addition with carry test`() {
+        val memory = UByteArrayMemory(0x0u..0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.A = 0x29u
+        memory.set(0x0Eu, 0xC6u) // ADD A, 0x20 opcode
+        memory.set(0x0Fu, 0x17u) // Immediate value 0x20
+        memory.set(0x10u, 0x27u) // DAA opcode
+        cpu.programCounter = 0xEu
+
+        cpu.step() // Execute ADD A, 0x20
+
+        assertEquals(0x40u.toUByte(), cpu.A) // Result of ADD A, 0x20
+
+        cpu.step() // Execute DAA
+
+        assertEquals(0x46u.toUByte(), cpu.A) // Adjusted value remains the same
+    }
+
+    @Test
+    fun `DAA Addition with carry test 2`() {
+        val memory = UByteArrayMemory(0x0u..0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.A = 0x99u
+        memory.set(0x0Eu, 0xC6u) // ADD A, 0x20 opcode
+        memory.set(0x0Fu, 0x01u) // Immediate value 0x20
+        memory.set(0x10u, 0x27u) // DAA opcode
+        cpu.programCounter = 0xEu
+
+        cpu.step() // Execute ADD A, 0x20
+
+        assertEquals(0x9Au.toUByte(), cpu.A) // Result of ADD A, 0x20
+
+        cpu.step() // Execute DAA
+
+        assertEquals(0x00u.toUByte(), cpu.A) // Adjusted value remains the same
+    }
+
 }

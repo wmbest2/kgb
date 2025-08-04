@@ -23,7 +23,7 @@ class LR35902(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Info,
+            minSeverity = Severity.Error,
         ),
         tag= "LR35902"
     )
@@ -90,7 +90,7 @@ class LR35902(
             val mask = (1u shl i).toUByte()
             if ((ie and mask) != 0u.toUByte() && (iflags and mask) != 0u.toUByte()) {
 
-                logger.i { "Handling interrupt ${i + 1})" }
+                logger.d { "Handling interrupt ${i + 1})" }
 
                 interruptsEnabled = false
                 // Clear IF flag for this interrupt
@@ -150,7 +150,7 @@ class LR35902(
 
         if (enableInterruptsAfterNextInstruction) {
             interruptsEnabled = true
-            logger.i { "Interrupts enabled after next instruction" }
+            logger.d { "Interrupts enabled after next instruction" }
             enableInterruptsAfterNextInstruction = false
         }
 

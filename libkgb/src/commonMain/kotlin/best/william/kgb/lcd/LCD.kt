@@ -256,13 +256,15 @@ class LCD(
         }
         renderer.render(pixelBuffer)
         // Render all pixels as ASCII for debugging
-        val asciiShades = arrayOf(' ', '░', '▒', '▓')
-        pixelBuffer.chunked(160).map {
-            it.joinToString(separator = "") { shade ->
-                asciiShades[shade.toInt()].toString()
+        if (logger.config.minSeverity <= Severity.Verbose) {
+            val asciiShades = arrayOf(' ', '░', '▒', '▓')
+            pixelBuffer.chunked(160).map {
+                it.joinToString(separator = "") { shade ->
+                    asciiShades[shade.toInt()].toString()
+                }
+            }.forEach {
+                logger.v("SCREEN: $it")
             }
-        }.forEach {
-            logger.v("SCREEN: $it")
         }
     }
 

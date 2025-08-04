@@ -1,7 +1,7 @@
 package best.william.kgb
 
 import best.william.kgb.memory.MemoryMirror
-import best.william.kgb.rom.loadAsRom
+import best.william.kgb.rom.loadCartridge
 import kgb.lcd.LCD
 import kgb.memory.IORegisters
 import kgb.memory.InterruptEnabledMemory
@@ -21,11 +21,11 @@ fun main() {
     //val rom = File("../reference/roms/test/cpu_instrs/individual/02-interrupts.gb").loadAsRom()
     //val rom = File("../reference/roms/test/oam_bug/rom_singles/1-lcd_sync.gb").loadAsRom()
     //val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
-    val rom = File("../reference/roms/tetris.gb").loadAsRom()
+    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
-    // Optional Switchable RAM Bank 0xA000 to 0xBFFF
-    val ram = UByteArrayMemory(0xC000u..0xDFFFu)
+    val wram = UByteArrayMemory(0xC000u..0xDFFFu)
+    val echoRam = MemoryMirror(0xE000u..0xFDFFu, wram)
     val oam = UByteArrayMemory(0xFE00u..0xFE9Fu) // OAM memory for sprites
 
     // I/O Registers 0xFF00 to 0xFF7F
@@ -39,15 +39,17 @@ fun main() {
 
     val memoryMap = MemoryMapper(
         bootRom, // Boot ROM is usually only used for the first few cycles
-        rom, // Main ROM 0x0000 to 0x7FFF
         vram, // Video RAM 0x8000 to 0x9FFF
-        ram,
-        MemoryMirror(0xE000u..0xFDFFu, ram),
+        wram,
+        echoRam,
         oam,
         ioRegisters,
         hram,
-        interruptEnabledMemory
+        interruptEnabledMemory,
+        *cartridge.getMemoryChunks()
     )
+
+    cartridge.getMemoryChunks().forEach { println("${it.addressRange.start.toString(16)}:${it.addressRange.endInclusive.toString(16)}") }
 
     val cpu = CPU(memoryMap)
     val renderer = best.william.kgb.lcd.LWJGLRenderer(cpu)
@@ -61,7 +63,7 @@ fun main() {
 
     lcd.interruptProvider = cpu
 
-    println("Running ${rom.name}")
+    println("Running ${cartridge.name}")
 
     try {
         while (!renderer.shouldClose()) {

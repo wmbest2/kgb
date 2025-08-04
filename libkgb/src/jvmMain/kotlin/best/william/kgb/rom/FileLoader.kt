@@ -1,11 +1,11 @@
 package best.william.kgb.rom
 
-import kgb.rom.Rom
-import kgb.rom.toRom
+import kgb.rom.Cartridge
+import kgb.rom.loadCartridge
 import java.io.File
 
 
 @ExperimentalUnsignedTypes
-fun File.loadAsRom(): Rom {
-    return this.readBytes().toRom()
+fun File.loadCartridge(): Cartridge {
+    return this.readBytes().loadCartridge()
 }

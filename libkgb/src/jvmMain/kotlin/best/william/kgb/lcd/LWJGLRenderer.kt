@@ -13,9 +13,14 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
     private var window: Long = 0
     private val width = 160
     private val height = 144
-    private val scale = 4 // Scale up for visibility
+    private val scale = 8 // Scale up for visibility
 
-    private var previousInputs: UByte = 0xFFu // Track previous frame's input state
+    // FPS tracking
+    private var frameCount = 0
+    private var lastFpsTime = System.currentTimeMillis()
+    private var currentFps = 0.0
+
+    private var screenBuffer = UByteArray(width * height)
 
     init {
         if (!GLFW.glfwInit()) throw RuntimeException("Unable to initialize GLFW")
@@ -23,7 +28,7 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
         if (window == 0L) throw RuntimeException("Failed to create GLFW window")
         GLFW.glfwMakeContextCurrent(window)
         GL.createCapabilities()
-        GL11.glClearColor(1f, 1f, 1f, 1f)
+        GL11.glClearColor(0f, 0f, 0f, 0f)
     }
 
     // Map keys to Game Boy buttons
@@ -48,7 +53,8 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
         if (inputChanged) {
             // Only trigger joypad interrupt if system was in a low-power state
             // For most normal gameplay, joypad changes don't trigger interrupts
-            // handledInput() // Remove this call for normal input changes          handleInput()
+            // handledInput() // Remove this call for normal input changes
+            interruptProvider.requestInterrupt(2) // Request joypad interrupt
         }
     }
 
@@ -68,17 +74,28 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
     }
 
     override fun render(pixels: UByteArray) {
+        pixels.copyInto(screenBuffer)
+
         GLFW.glfwPollEvents()
         checkInput()
+        // Update FPS calculation
+        frameCount++
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastFpsTime >= 1000) {
+            currentFps = frameCount.toDouble() / ((currentTime - lastFpsTime) / 1000.0)
+            // Update window title with FPS
+            GLFW.glfwSetWindowTitle(window, "Game Boy LCD - FPS: ${String.format("%.1f", currentFps)}")
+            lastFpsTime = currentTime
+            frameCount = 0
+        }
+
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
-        GL11.glBegin(GL11.GL_POINTS)
-        GL11.glBegin(GL11.GL_POINTS)
-        GL11.glBegin(GL11.GL_POINTS)
-        GL11.glBegin(GL11.GL_POINTS)
+
+        // Fixed rendering - removed duplicate glBegin calls
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val idx = y * width + x
-                val shade = pixels[idx].toInt() and 0xFF
+                val shade = screenBuffer[idx].toInt() and 0xFF
                 val color = when (shade) {
                     0 -> floatArrayOf(1f, 1f, 1f) // White
                     1 -> floatArrayOf(0.7f, 0.7f, 0.7f) // Light gray

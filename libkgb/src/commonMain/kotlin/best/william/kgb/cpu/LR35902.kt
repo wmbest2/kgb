@@ -1169,6 +1169,8 @@ class LR35902(
     }
 
     override fun requestInterrupt(interruptID: Int) {
+        // Ignore JOYPAD interrupt if not stopped
+        if (interruptID == 2 && !STOPPED) return
         IF = IF or ((1u shl interruptID).toUByte())
     }
 }

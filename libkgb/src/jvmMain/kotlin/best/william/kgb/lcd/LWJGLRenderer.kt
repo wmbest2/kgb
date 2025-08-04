@@ -1,17 +1,21 @@
 package best.william.kgb.lcd
 
+import best.william.kgb.controller.Controller
+import kgb.cpu.InterruptProvider
 import kgb.lcd.LCDRenderer
-import org.lwjgl.BufferUtils
+import kgb.util.bit
+import kgb.util.withBit
 import org.lwjgl.glfw.GLFW
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11
-import kotlin.experimental.and
 
-class LWJGLRenderer : LCDRenderer {
+class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Controller(interruptProvider) {
     private var window: Long = 0
     private val width = 160
     private val height = 144
     private val scale = 4 // Scale up for visibility
+
+    private var previousInputs: UByte = 0xFFu // Track previous frame's input state
 
     init {
         if (!GLFW.glfwInit()) throw RuntimeException("Unable to initialize GLFW")
@@ -22,8 +26,50 @@ class LWJGLRenderer : LCDRenderer {
         GL11.glClearColor(1f, 1f, 1f, 1f)
     }
 
+    // Map keys to Game Boy buttons
+    // Action: A, B, Select, Start (bits 0-3 of buttonStates)
+    // Direction: Right, Left, Up, Down (bits 4-7 of buttonStates)
+    val keys = arrayOf(
+        GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_P,
+        GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN
+    )
+
+    fun checkInput() {
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
+            GLFW.glfwSetWindowShouldClose(window, true)
+        }
+
+        val inputChanged = keys.withIndex()
+            .map { (i, key) ->
+                checkKey(key, i)
+            }
+            .any()
+
+        if (inputChanged) {
+            // Only trigger joypad interrupt if system was in a low-power state
+            // For most normal gameplay, joypad changes don't trigger interrupts
+            // handledInput() // Remove this call for normal input changes          handleInput()
+        }
+    }
+
+    private fun checkKey(
+        key: Int,
+        i: Int,
+    ): Boolean {
+        val isPressed = GLFW.glfwGetKey(window, key) == GLFW.GLFW_PRESS
+        val wasPressed = buttonStates.bit(i)
+
+        buttonStates = buttonStates.withBit(i, isPressed)
+
+        if (isPressed != wasPressed) {
+            return true
+        }
+        return false
+    }
+
     override fun render(pixels: UByteArray) {
         GLFW.glfwPollEvents()
+        checkInput()
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
         GL11.glBegin(GL11.GL_POINTS)
         GL11.glBegin(GL11.GL_POINTS)

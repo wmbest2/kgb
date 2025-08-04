@@ -1,5 +1,6 @@
 package kgb.memory
 
+import best.william.kgb.controller.Controller
 import kgb.lcd.LCD
 
 interface CPURegisters {
@@ -40,6 +41,7 @@ class IORegisters: IMemory {
     // LCD and interrupt registers are attached after construction
     private var lcd: LCD? = null
     private var CPURegisters: CPURegisters? = null
+    private lateinit var controller: Controller
 
     fun attachLCD(lcd: LCD) {
         this.lcd = lcd
@@ -47,8 +49,13 @@ class IORegisters: IMemory {
     fun attachCPURegisters(ir: CPURegisters) {
         CPURegisters = ir
     }
+    fun attachController(controller: Controller) {
+        this.controller = controller
+    }
     // Backing fields for registers
-    var JOYP: UByte = 0xCFu  // P1 - Joypad register, bits 7-6 unused, bits 5-4 control input selection
+    var JOYP: UByte
+        get() = controller.JOYP
+        set(value) { controller.JOYP = value }
     var SB: UByte = 0x00u    // Serial transfer data register
     var SC: UByte = 0x7Eu    // Serial I/O control register
     var BANK: UByte = 0u
@@ -73,7 +80,7 @@ class IORegisters: IMemory {
         inline get() = 0xFF00u..0xFF7Fu
 
     override fun set(position: UShort, value: UByte) = when(position.toUInt()) {
-        0xFF00u -> {}
+        0xFF00u -> JOYP = value
         0xFF01u -> SB = value
         0xFF02u -> SC = value
         0xFF04u -> DIV = 0u // Writing resets DIV

@@ -26,7 +26,7 @@ class LCD(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Debug,
+            minSeverity = Severity.Warn,
         ),
         tag = "LCD"
     )
@@ -151,33 +151,60 @@ class LCD(
                     if (spritesOnLine.size >= 10) break // Max 10 sprites per line
                 }
             }
+            // Sort sprites by X position for proper priority (leftmost sprite has highest priority)
+            spritesOnLine.sortBy { it.second }
+
             for ((i, spriteX) in spritesOnLine) {
                 val base = ((i * 4u) + 0xFE00u).toUShort()
                 val spriteY = memory[base] - 16u
-                val tileIndex = memory[(base + 1u).toUShort()]
-                val flags = memory[(base + 2u).toUShort()]
+                var tileIndex = memory[(base + 2u).toUShort()] // Fixed: tile index is at offset 2
+                val flags = memory[(base + 3u).toUShort()] // Fixed: flags are at offset 3
+
+                // For 8x16 sprites, use consecutive tiles and ignore bit 0
+                if (OBJSize) {
+                    tileIndex = tileIndex and 0xFEu
+                }
+
                 val yFlip = flags.bit(6)
                 val xFlip = flags.bit(5)
                 val palette = if (flags.bit(4)) OBP1 else OBP0
-                val priority = flags.bit(7)
+                val priority = flags.bit(7) // true = behind background (except color 0)
+
                 val pixelY = if (!yFlip) line - spriteY else spriteHeight - 1u - (line - spriteY)
-                val tileAddr = 0x8000u + (tileIndex * 16u + pixelY * 2u)
+
+                // For 8x16 sprites, determine which tile to use (top or bottom)
+                val actualTileIndex = if (OBJSize && pixelY >= 8u) {
+                    (tileIndex + 1u).toUByte()
+                } else {
+                    tileIndex
+                }
+                val actualPixelY = if (OBJSize && pixelY >= 8u) pixelY - 8u else pixelY
+
+                val tileAddr = 0x8000u + (actualTileIndex * 16u + actualPixelY * 2u)
                 val byte1 = memory[(tileAddr).toUShort()]
                 val byte2 = memory[(tileAddr + 1u).toUShort()]
+
                 for (px in 0u until 8u) {
                     val x = if (!xFlip) px else 7u - px
                     val screenX = spriteX + px
                     if (screenX !in 0u until 160u) continue
+
                     val colorNum = (((byte2.toInt() shr (7 - x.toInt())) and 1) shl 1) or ((byte1.toInt() shr (7 - x.toInt())) and 1)
                     if (colorNum == 0) continue // Transparent
+
                     val shade = ((palette.toInt() shr (colorNum * 2)) and 0b11).toUByte()
-                    if (!priority || pixels[screenX.toInt()].toUInt() == 0u) {
+
+                    // Fixed priority logic:
+                    // - If priority = false (0), sprite is always in front
+                    // - If priority = true (1), sprite is behind background unless background is color 0
+                    val bgIsTransparent = pixels[screenX.toInt()].toUInt() == 0u
+                    if (!priority || bgIsTransparent) {
                         pixels[screenX.toInt()] = shade
                     }
-                    logger.w { "Sprite: OAM index=$i spriteX=$spriteX spriteY=$spriteY tileIndex=$tileIndex pixelY=$pixelY xFlip=$xFlip yFlip=$yFlip colorNum=$colorNum shade=$shade" }
+
+                    logger.v { "Sprite: OAM index=$i spriteX=$spriteX spriteY=$spriteY tileIndex=$actualTileIndex pixelY=$actualPixelY xFlip=$xFlip yFlip=$yFlip colorNum=$colorNum shade=$shade priority=$priority" }
                 }
             }
-
         }
 
         for (x in 0 until 160) {

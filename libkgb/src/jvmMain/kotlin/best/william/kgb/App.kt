@@ -49,13 +49,14 @@ fun main() {
         interruptEnabledMemory
     )
 
-    val renderer = best.william.kgb.lcd.LWJGLRenderer()
+    val cpu = CPU(memoryMap)
+    val renderer = best.william.kgb.lcd.LWJGLRenderer(cpu)
     val lcd = LCD(memoryMap, renderer)
 
-    val cpu = CPU(memoryMap)
 
     ioRegisters.attachCPURegisters(cpu)
     interruptEnabledMemory.attachInterruptRegisters(cpu)
+    ioRegisters.attachController(renderer)
     ioRegisters.attachLCD(lcd)
 
     lcd.interruptProvider = cpu

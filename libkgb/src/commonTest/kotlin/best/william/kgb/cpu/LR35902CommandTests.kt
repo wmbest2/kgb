@@ -246,4 +246,58 @@ class LR35902CommandTests {
         assertEquals(0x00u.toUByte(), cpu.A) // Adjusted value remains the same
     }
 
+    @Test
+    fun `DAA Addition overflow test`() {
+        val memory = UByteArrayMemory(0x0u..0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.A = 0x99u
+        memory.set(0x0Eu, 0xC6u) // ADD A, 0x99 opcode
+        memory.set(0x0Fu, 0x99u) // Immediate value 0x99
+        memory.set(0x10u, 0x27u) // DAA opcode
+        cpu.programCounter = 0xEu
+
+        cpu.step() // Execute ADD A, 0x99
+        assertEquals(0x32u.toUByte(), cpu.A) // Result of ADD A, 0x99 (overflow, wraps to 0x32)
+        assertEquals(cpu.carryBit, true)
+
+        cpu.step() // Execute DAA
+        assertEquals(0x98u.toUByte(), cpu.A) // Adjusted value
+        assertEquals(cpu.carryBit, true)
+        assertEquals(cpu.halfCarryBit, false)
+    }
+
+    @Test
+    fun `DAA Subtraction with half-carry test`() {
+        val memory = UByteArrayMemory(0x0u..0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.A = 0x10u
+        memory.set(0x0Eu, 0xD6u) // SUB A, 0x01 opcode
+        memory.set(0x0Fu, 0x01u) // Immediate value
+        memory.set(0x10u, 0x27u) // DAA opcode
+        cpu.programCounter = 0xEu
+
+        cpu.step() // Execute SUB A, 0x01
+        assertEquals(0x0Fu.toUByte(), cpu.A) // Result of SUB A, 0x01
+
+        cpu.step() // Execute DAA
+        assertEquals(0x09u.toUByte(), cpu.A) // Adjusted value
+    }
+
+    @Test
+    fun `DAA Addition with initial carry and half-carry flags set`() {
+        val memory = UByteArrayMemory(0x0u..0xFFu)
+        val cpu = LR35902(memory)
+
+        cpu.A = 0x8Fu
+        cpu.carryBit = true
+        cpu.halfCarryBit = true
+        memory.set(0x0Eu, 0x27u) // DAA opcode
+        cpu.programCounter = 0xEu
+
+        cpu.step() // Execute DAA
+        assertEquals(0xF5u.toUByte(), cpu.A) // Adjusted value
+    }
+
 }

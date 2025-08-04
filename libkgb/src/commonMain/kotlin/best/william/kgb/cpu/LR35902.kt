@@ -340,27 +340,33 @@ class LR35902(
 
     private fun DAA(): Int {
         var result = A.toUInt()
+        var newCarry = carryBit
 
         if (!subtractBit) {
+            // Addition mode
             if (halfCarryBit || (result and 0x0Fu) > 9u) {
                 result += 0x06u
             }
             if (carryBit || result > 0x9Fu) {
                 result += 0x60u
+                newCarry = true
             }
         } else {
+            // Subtraction mode
             if (halfCarryBit) {
                 result = (result - 0x06u) and 0xFFu
             }
             if (carryBit) {
-                result -= 0x60u
+                result = (result - 0x60u) and 0xFFu
             }
+            // In subtraction mode, carry flag is preserved, not recalculated
         }
 
-        A = (result and 0xFFu).toUByte()
+        A = result.toUByte()
         zeroBit = A == UByte.ZERO
         halfCarryBit = false
-        carryBit = result.bit(8)
+        carryBit = newCarry
+        // Note: subtractBit is NOT cleared by DAA - it preserves the N flag
         return 4 // DAA takes 4 cycles
     }
 
@@ -521,12 +527,13 @@ class LR35902(
             else -> TODO()
         }
 
-        val original = (result - 1u).toUByte()
+        val original = result - 1u
 
         zeroBit = result == UByte.ZERO
-        halfCarryBit = original.bit(3) && !result.bit(3)
+        // Half-carry is set when there's a carry from bit 3 to bit 4
+        // This happens when the lower nibble of the original value is 0xF
+        halfCarryBit = (original and 0x0Fu) == 0x0Fu
         subtractBit = false
-
         return 8 // INC n
     }
 
@@ -566,13 +573,13 @@ class LR35902(
 
     private fun `ADD A r`(opcode: UInt): Int {
         val offset = opcode % 8u
-        val original = A
-        val operand = readRegisterBy(offset)
+        val original = A.toUInt()
+        val operand = readRegisterBy(offset).toUInt()
         val result = original + operand
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
         carryBit = result.bit(8)
-        halfCarryBit =  (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) > 0xFu
+        halfCarryBit = (original and 0xFu) + (operand and 0xFu) > 0xFu
         subtractBit = false
         return 4 // ADD A, r
     }
@@ -580,13 +587,13 @@ class LR35902(
     private fun `ADC A r`(opcode: UInt): Int {
         val offset = opcode % 8u
         val carry = if (carryBit) 1u else 0u
-        val original = A
-        val operand = readRegisterBy(offset)
+        val original = A.toUInt()
+        val operand = readRegisterBy(offset).toUInt()
         val result = original + operand + carry
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
         carryBit = result.bit(8)
-        halfCarryBit =  (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) + carry > 0xFu
+        halfCarryBit = (original and 0xFu) + (operand and 0xFu) + carry > 0xFu
         subtractBit = false
         return 4 // ADC A, r
     }
@@ -611,12 +618,12 @@ class LR35902(
 
     private fun `ADD A d8`(): Int {
         val operand = memory[programCounter++]
-        val original = A
-        val result = original + operand
+        val original = A.toUInt()
+        val result = original + operand.toUInt()
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
         carryBit = result.bit(8)
-        halfCarryBit = (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) > 0xFu
+        halfCarryBit = (original and 0xFu) + (operand.toUInt() and 0xFu) > 0xFu
         subtractBit = false
         return 8 // ADD A, d8
     }
@@ -624,12 +631,12 @@ class LR35902(
     private fun `ADC A d8`(): Int {
         val operand = memory[programCounter++]
         val carry = if (carryBit) 1u else 0u
-        val original = A
-        val result = original + operand + carry
+        val original = A.toUInt()
+        val result = original + operand.toUInt() + carry
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
         carryBit = result.bit(8)
-        halfCarryBit = (original and 0xFu.toUByte()) + (operand and 0xFu.toUByte()) + carry > 0xFu
+        halfCarryBit = (original and 0xFu) + (operand.toUInt() and 0xFu) + carry > 0xFu
         subtractBit = false
         return 8 // ADC A, d8
     }
@@ -786,14 +793,8 @@ class LR35902(
     private fun `RL n`(opcode: UInt, setZero: Boolean = true): Int {
         val offset = opcode % 8u
 
-        val value = readRegisterBy(offset).toUInt() shl 1
-        val output = value.withBit(0, carryBit).toUByte() // Shift left setting the 0 bit to the old 7 bit value
-        writeRegisterBy(offset, output)
-        carryBit = value.bit(8)
-        if (setZero) {
-            logger.v { "Setting zeroBit for opcode $opcode to ${output == UByte.ZERO}" }
-            zeroBit = output == UByte.ZERO
-        }
+        val registerData = readRegisterBy(offset)
+        writeRegisterBy(offset, rotate(Direction.LEFT, registerData, setZero, false))
         return 8 // RL n
     }
 
@@ -801,15 +802,7 @@ class LR35902(
         val offset = opcode % 8u
 
         val registerData = readRegisterBy(offset)
-        val oldBitSeven = registerData.bit(7)
-        val value = registerData.toUInt() shl 1
-        val output = value.withBit(0, oldBitSeven).toUByte() // Rotate left, bit 7 goes to bit 0
-        writeRegisterBy(offset, output)
-        carryBit = oldBitSeven // Carry flag is set to the old bit 7
-        if (setZero) {
-            logger.v { "Setting zeroBit for RLC to ${output == UByte.ZERO}" }
-            zeroBit = output == UByte.ZERO
-        }
+        writeRegisterBy(offset, rotate(Direction.LEFT, registerData, setZero, true))
         return 8 // RLC n
     }
 
@@ -817,14 +810,7 @@ class LR35902(
         val offset = opcode % 8u
 
         val registerData = readRegisterBy(offset)
-        val oldZero = registerData.bit(0)
-        val value = registerData.toUInt() shr 1
-
-        val output = value.withBit(7, carryBit).toUByte() // Shift right setting the 0 bit to the old 7 bit value
-        writeRegisterBy(offset, output)
-        carryBit = oldZero
-        if (setZero)
-            zeroBit = output == UByte.ZERO
+        writeRegisterBy(offset, rotate(Direction.RIGHT, registerData, setZero, false))
         return 8 // RR n
     }
 
@@ -832,15 +818,43 @@ class LR35902(
         val offset = opcode % 8u
 
         val registerData = readRegisterBy(offset)
-        val oldZero = registerData.bit(0)
-        val value = registerData.toUInt() shr 1
+        writeRegisterBy(offset, rotate(Direction.RIGHT, registerData, setZero, true))
+        return 8 // RLR n
+    }
 
-        val output = value.withBit(7, oldZero).toUByte() // Shift right setting the 0 bit to the carryBit
-        writeRegisterBy(offset, output)
-        carryBit = oldZero
-        if (setZero)
+    private enum class Direction {
+        LEFT, RIGHT
+    }
+
+    private fun rotate(direction: Direction, value: UByte, setZero: Boolean = true, withCarry: Boolean): UByte {
+        val (shiftedValue, rotatedBit, endBit) = when (direction) {
+            Direction.LEFT -> Triple(value.toUInt() shl 1, value.bit(7), 0)
+            Direction.RIGHT -> Triple(value.toUInt() shr 1, value.bit(0), 7)
+        }
+
+        val newValue = if (withCarry) {
+            // Rotate with carry (RRC/RLC) - rotated bit goes to opposite end
+            shiftedValue.withBit(endBit, rotatedBit)
+        } else {
+            // Rotate through carry (RR/RL) - current carry flag goes to opposite end
+            shiftedValue.withBit(endBit, carryBit)
+        }
+
+        // Set carry flag to the bit that was rotated out
+        carryBit = rotatedBit
+
+        // Rotate operations always clear H and N flags
+        halfCarryBit = false
+        subtractBit = false
+
+        val output = newValue.toUByte()
+        if (setZero) {
             zeroBit = output == UByte.ZERO
-        return 8 // RRC n
+        } else {
+            // For accumulator operations (RLCA, RLA, etc.), zero flag is cleared
+            zeroBit = false
+        }
+        return output
     }
 
     private fun `SLA n`(opcode: UInt): Int {
@@ -860,12 +874,13 @@ class LR35902(
         val offset = opcode % 8u
 
         val registerData = readRegisterBy(offset)
-        val oldZero = registerData.bit(0)
+        val oldBitZero = registerData.bit(0)  // Bit that gets shifted out (goes to carry)
+        val oldBitSeven = registerData.bit(7)  // MSB that needs to be preserved
         val value = registerData.toUInt() shr 1
 
-        val output = value.withBit(7, oldZero).toUByte() // Shift left setting the 0 bit to the old 7 bit value
+        val output = value.withBit(7, oldBitSeven).toUByte() // Preserve the sign bit (bit 7)
         writeRegisterBy(offset, output)
-        carryBit = oldZero
+        carryBit = oldBitZero  // Carry flag gets the bit that was shifted out
         halfCarryBit = false
         zeroBit = output == UByte.ZERO
         subtractBit = false
@@ -905,7 +920,7 @@ class LR35902(
         val bit = (opcode - 0x40u) / 8u
 
         halfCarryBit = true
-        carryBit = false
+        subtractBit = false
         zeroBit = !readRegisterBy(offset).bit(bit.toInt())
         return 8 // BIT b, n
     }

@@ -2,28 +2,33 @@ package kgb.memory
 
 import kgb.lcd.LCD
 
-interface InterruptRegisters {
+interface CPURegisters {
     var IF: UByte
     var IE: UByte
+
+    var DIV: UByte
+    var TIMA: UByte
+    var TMA: UByte
+    var TAC: UByte
 }
 
 class InterruptEnabledMemory(): IMemory {
-    private var interruptRegisters: InterruptRegisters? = null
+    private var CPURegisters: CPURegisters? = null
 
-    fun attachInterruptRegisters(ir: InterruptRegisters) {
-        interruptRegisters = ir
+    fun attachInterruptRegisters(ir: CPURegisters) {
+        CPURegisters = ir
     }
 
     override val addressRange: UIntRange
         inline get() = 0xFFFFu..0xFFFFu // Only IE register
     override fun set(position: UShort, value: UByte) {
         if (position.toUInt() == 0xFFFFu) {
-            interruptRegisters?.IE = value
+            CPURegisters?.IE = value
         }
     }
     override fun get(position: UShort): UByte {
         return if (position.toUInt() == 0xFFFFu) {
-            interruptRegisters?.IE ?: 0u
+            CPURegisters?.IE ?: 0u
         } else {
             0u // Invalid position, return 0
         }
@@ -34,32 +39,41 @@ class InterruptEnabledMemory(): IMemory {
 class IORegisters: IMemory {
     // LCD and interrupt registers are attached after construction
     private var lcd: LCD? = null
-    private var interruptRegisters: InterruptRegisters? = null
+    private var CPURegisters: CPURegisters? = null
 
     fun attachLCD(lcd: LCD) {
         this.lcd = lcd
     }
-    fun attachInterruptRegisters(ir: InterruptRegisters) {
-        interruptRegisters = ir
+    fun attachCPURegisters(ir: CPURegisters) {
+        CPURegisters = ir
     }
     // Backing fields for registers
-    var JOYP: UByte = 0u
-    var SB: UByte = 0u
-    var SC: UByte = 0u
-    var DIV: UByte = 0u
-    var TIMA: UByte = 0u
-    var TMA: UByte = 0u
-    var TAC: UByte = 0u
+    var JOYP: UByte = 0xCFu  // P1 - Joypad register, bits 7-6 unused, bits 5-4 control input selection
+    var SB: UByte = 0x00u    // Serial transfer data register
+    var SC: UByte = 0x7Eu    // Serial I/O control register
     var BANK: UByte = 0u
+    var DIV: UByte
+        get() = CPURegisters?.DIV ?: 0u
+        set(value) { CPURegisters?.DIV = value }
+    var TIMA: UByte
+        get() = CPURegisters?.TIMA ?: 0u
+        set(value) { CPURegisters?.TIMA = value }
+    var TMA: UByte
+        get() = CPURegisters?.TMA ?: 0u
+        set(value) { CPURegisters?.TMA = value }
+    var TAC: UByte
+        get() = CPURegisters?.TAC ?: 0u
+        set(value) { CPURegisters?.TAC = value }
+
     var IF: UByte
-        get() = interruptRegisters?.IF ?: 0u
-        set(value) { interruptRegisters?.IF = value }
+        get() = CPURegisters?.IF ?: 0u
+        set(value) { CPURegisters?.IF = value }
 
     override val addressRange: UIntRange
         inline get() = 0xFF00u..0xFF7Fu
 
     override fun set(position: UShort, value: UByte) = when(position.toUInt()) {
-        0xFF00u -> JOYP = value
+        0xFF00u -> {}
         0xFF01u -> SB = value
         0xFF02u -> SC = value
         0xFF04u -> DIV = 0u // Writing resets DIV

@@ -26,7 +26,7 @@ class LCD(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Warn,
+            minSeverity = Severity.Debug,
         ),
         tag = "LCD"
     )

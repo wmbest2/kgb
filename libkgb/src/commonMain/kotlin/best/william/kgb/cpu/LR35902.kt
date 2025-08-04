@@ -8,7 +8,7 @@ import co.touchlab.kermit.loggerConfigInit
 import co.touchlab.kermit.platformLogWriter
 import kgb.memory.IMemory
 import kgb.cpu.InterruptProvider
-import kgb.memory.InterruptRegisters
+import kgb.memory.CPURegisters
 import kgb.util.*
 import kotlinx.coroutines.newSingleThreadContext
 import kotlin.time.measureTime
@@ -17,13 +17,13 @@ import kotlin.time.measureTime
 class LR35902(
     val memory: IMemory,
     registers: IRegisters = Registers()
-): IRegisters by registers, InterruptProvider, InterruptRegisters {
+): IRegisters by registers, InterruptProvider, CPURegisters {
 
     val scheduler = newSingleThreadContext("MyOwnThread")
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Warn,
+            minSeverity = Severity.Info,
         ),
         tag= "LR35902"
     )
@@ -45,10 +45,15 @@ class LR35902(
     private var HALT = false
     private var STOPPED = false
     private var interruptsEnabled = false
+    private var enableInterruptsAfterNextInstruction = false
     // endregion
 
     override var IF: UByte = 0u
     override var IE: UByte = 0u
+    override var DIV: UByte = 0u
+    override var TIMA: UByte = 0u
+    override var TMA: UByte = 0u
+    override var TAC: UByte = 0u
 
     private val interruptVectors = listOf(0x40u, 0x48u, 0x50u, 0x58u, 0x60u)
 
@@ -65,11 +70,28 @@ class LR35902(
 
     private fun handleInterrupts() {
         val ie = IE
-        var iflags = IF
+        val iflags = IF
+
+        // STOPPED mode can be exited by joypad interrupt regardless of interrupt enable state
+        if (STOPPED && (iflags and 0x10u.toUByte()) != 0u.toUByte()) {
+            STOPPED = false
+        }
+
+        // HALT mode can be exited by any enabled interrupt, even if IME is false
+        if (HALT && (ie and iflags) != 0u.toUByte()) {
+            HALT = false
+            logger.i { "Exiting HALT due to pending interrupt - IF: 0x${IF.toString(16)}, IE: 0x${IE.toString(16)}, IME: $interruptsEnabled" }
+        }
+
+        // Only service interrupts if IME is enabled
         if (!interruptsEnabled) return
+
         for (i in 0..4) {
             val mask = (1u shl i).toUByte()
             if ((ie and mask) != 0u.toUByte() && (iflags and mask) != 0u.toUByte()) {
+
+                logger.i { "Handling interrupt ${i + 1})" }
+
                 interruptsEnabled = false
                 // Clear IF flag for this interrupt
                 IF = iflags and mask.inv()
@@ -77,7 +99,47 @@ class LR35902(
                 pushStack(programCounter)
                 // Jump to interrupt vector
                 programCounter = interruptVectors[i].toUShort()
+                // Exit HALT state if we were halted
+                HALT = false
                 break
+            }
+        }
+    }
+
+    // Timer state tracking
+    private var divCounter = 0
+    private var timaCounter = 0
+
+    private fun handleTimers(cycles: Int) {
+        // DIV register increments every 256 CPU cycles (16384 Hz at 4.194304 MHz)
+        divCounter += cycles
+        while (divCounter >= 256) {
+            divCounter -= 256
+            DIV++
+        }
+
+        // TIMA timer handling - only if timer is enabled (bit 2 of TAC)
+        if ((TAC and 0x04u) != 0u.toUByte()) {
+            val timaFrequency = when (TAC and 0x03u) {
+                0u.toUByte() -> 1024  // 4096 Hz (CPU_CLOCK / 1024)
+                1u.toUByte() -> 16    // 262144 Hz (CPU_CLOCK / 16)
+                2u.toUByte() -> 64    // 65536 Hz (CPU_CLOCK / 64)
+                3u.toUByte() -> 256   // 16384 Hz (CPU_CLOCK / 256)
+                else -> 1024 // Default case (should never happen)
+            }
+
+            timaCounter += cycles
+            while (timaCounter >= timaFrequency) {
+                timaCounter -= timaFrequency
+
+                // Increment TIMA
+                if (TIMA == 0xFFu.toUByte()) {
+                    // TIMA overflow - reload with TMA and request timer interrupt
+                    TIMA = TMA
+                    requestInterrupt(2) // Timer interrupt is ID 2
+                } else {
+                    TIMA++
+                }
             }
         }
     }
@@ -85,12 +147,23 @@ class LR35902(
     fun step(): Int {
 
         handleInterrupts()
-        if (HALT) {
-            logger.d { "CPU is HALTED, skipping step." }
-            return 4 // HALT takes 4 cycles
+
+        if (enableInterruptsAfterNextInstruction) {
+            interruptsEnabled = true
+            logger.i { "Interrupts enabled after next instruction" }
+            enableInterruptsAfterNextInstruction = false
         }
-        val output = if (programCounter >= 0x0100u && logger.config.minSeverity <= Severity.Debug) {
-            var cycles: Int = 0
+
+        // Check if we're in HALT or STOPPED state
+        if (HALT || STOPPED) {
+            // In HALT/STOPPED state, still advance timers but don't execute instructions
+            val cycles = 4
+            handleTimers(cycles)
+            return cycles
+        }
+
+        val cycles = if (programCounter >= 0x0100u && logger.config.minSeverity <= Severity.Debug) {
+            var cycles = 0
             logger.d {
                 buildString {
                     var cbDebug = ""
@@ -117,15 +190,12 @@ class LR35902(
         } else {
             performStep().second
         }
-        return output
+        handleTimers(cycles)
+        return cycles
     }
 
     private fun performStep(): Pair<UInt, Int> {
-        if (HALT || STOPPED) {
-            // Skip only once if interrupts are disabled [ See gbcpuman.pdf, Page 19 ]
-            if (!interruptsEnabled) HALT = false
-            return 0u to 4
-        }
+        // HALT and STOPPED are now handled in step(), not here
         val opcode = memory[programCounter++].toUInt()
 
         val cycles = when(opcode) {
@@ -247,7 +317,7 @@ class LR35902(
     }
 
     private fun EI(): Int {
-        interruptsEnabled = true
+        enableInterruptsAfterNextInstruction = true
         return 4
     }
 
@@ -1014,7 +1084,7 @@ class LR35902(
     }
 
     private fun RETI(): Int {
-        interruptsEnabled = true
+        enableInterruptsAfterNextInstruction = true
         return RET() // RETI is just a RET with interrupts enabled
     }
 

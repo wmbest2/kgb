@@ -96,6 +96,8 @@ fun UInt.toAssemblyString(): String {
         0xF6u -> "OR d8"
         0xFEu -> "CP d8"
 
+        0x27u -> "DAA" // Decimal Adjust for Addition
+        0x10u -> "STOP" // Stop the CPU
 
         // Stack Operations
         0xC0u, 0xD0u, 0xC8u, 0xD8u -> "RET n"

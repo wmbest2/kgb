@@ -3,7 +3,6 @@ package best.william.kgb
 import best.william.kgb.memory.MemoryMirror
 import best.william.kgb.rom.loadAsRom
 import kgb.lcd.LCD
-import kgb.lcd.LCDRenderer
 import kgb.memory.IORegisters
 import kgb.memory.InterruptEnabledMemory
 import kgb.memory.MemoryMapper
@@ -19,9 +18,10 @@ fun main() {
     val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
     // Rom range: 0x0100 to 0x7FFF
     // Optional Rom Bank 0x8000 to 0x9FFF
-    // val rom = File("../reference/roms/test/cpu_instrs/individual/01-special.gb").loadAsRom()
-     val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
-    //val rom = File("../reference/roms/tetris.gb").loadAsRom()
+    //val rom = File("../reference/roms/test/cpu_instrs/individual/02-interrupts.gb").loadAsRom()
+    //val rom = File("../reference/roms/test/oam_bug/rom_singles/1-lcd_sync.gb").loadAsRom()
+    //val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
+    val rom = File("../reference/roms/tetris.gb").loadAsRom()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
     // Optional Switchable RAM Bank 0xA000 to 0xBFFF
@@ -54,7 +54,7 @@ fun main() {
 
     val cpu = CPU(memoryMap)
 
-    ioRegisters.attachInterruptRegisters(cpu)
+    ioRegisters.attachCPURegisters(cpu)
     interruptEnabledMemory.attachInterruptRegisters(cpu)
     ioRegisters.attachLCD(lcd)
 

@@ -8,6 +8,9 @@ import kgb.memory.IORegisters
 import kgb.memory.InterruptEnabledMemory
 import kgb.memory.MemoryMapper
 import kgb.memory.UByteArrayMemory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.io.File
 import kotlin.time.ExperimentalTime
 import best.william.kgb.cpu.LR35902 as CPU
@@ -15,6 +18,8 @@ import best.william.kgb.cpu.LR35902 as CPU
 @ExperimentalTime
 @ExperimentalUnsignedTypes
 fun main() {
+    val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     val bootRomBytes = File("../reference/DMG_ROM.bin").readBytes().toUByteArray()
     val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
     // Rom range: 0x0100 to 0x7FFF
@@ -22,13 +27,13 @@ fun main() {
     //val cartridge = File("../reference/roms/test/cpu_instrs/individual/02-interrupts.gb").loadCartridge()
     //val cartridge = File("../reference/roms/test/oam_bug/oam_bug.gb").loadCartridge()
 //    val cartridge = File("../reference/roms/test/interrupt_time/interrupt_time.gb").loadCartridge()
-    val cartridge = File("../reference/roms/test/cpu_instrs.gb").loadCartridge()
-    //val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
+//    val cartridge = File("../reference/roms/test/cpu_instrs.gb").loadCartridge()
+//    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
+    val cartridge = File("../reference/roms/super-mario-land.gb").loadCartridge()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
     val wram = UByteArrayMemory(0xC000u..0xDFFFu)
     val echoRam = MemoryMirror(0xE000u..0xFDFFu, wram)
-    val oam = UByteArrayMemory(0xFE00u..0xFE9Fu) // OAM memory for sprites
 
     // I/O Registers 0xFF00 to 0xFF7F
     val ioRegisters = IORegisters()
@@ -72,10 +77,24 @@ fun main() {
     println("Running ${cartridge.name}")
 
     try {
+
+        var previousFrameStart = System.nanoTime()
         while (!renderer.shouldClose()) {
+
             // Emulate CPU cycles and update LCD
             val cycles = cpu.step()
-            lcd.update(cycles)
+            val renderedFrame = lcd.update(cycles)
+
+            // If a frame was rendered, we wait to maintain a consistent frame rate
+            if (renderedFrame) {
+                var elapsed = System.nanoTime() - previousFrameStart
+                val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toLong()
+                while (elapsed < targetFrameTimeNs) {
+                    Thread.yield()
+                    elapsed = System.nanoTime() - previousFrameStart
+                }
+                previousFrameStart = System.nanoTime()
+            }
         }
     } catch (e: Exception) {
         println(e.printStackTrace())

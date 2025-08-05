@@ -87,7 +87,7 @@ class LCD(
             logger.d { "DMA transfer initiated with value: $value" }
             val startAddress = (value.toInt() shl 8) and 0xFF00
             for (i in 0 until 160) {
-                oam[(0xFE00u + i.toUInt()).toUShort()] = memory[(startAddress + i).toUShort()]
+                memory[(0xFE00u + i.toUInt()).toUShort()] = memory[(startAddress + i).toUShort()]
             }
         }
     var BGP: UByte = 0u
@@ -128,6 +128,7 @@ class LCD(
     // endregion
 
     private var scanlineCounter = 0
+    private var frameCycleCounter = 0 // Track cycles for the current frame
     val pixelBuffer: UByteArray = UByteArray(160 * 144)
 
     private fun drawScanline() {
@@ -335,10 +336,12 @@ class LCD(
         }
     }
 
-    fun update(cycles: Int) {
-        if (!LCDEnabled) return
+    fun update(cycles: Int): Boolean {
+        if (!LCDEnabled) return false
         scanlineCounter -= cycles
+        frameCycleCounter += cycles
 
+        var rendered = false
         if (scanlineCounter <= 0) {
             scanlineCounter += 456
             val currentLine = LY.toUInt()
@@ -351,11 +354,14 @@ class LCD(
                     logger.v { "Drawing scanline $LY" }
                     drawScanline()
                 }
+
                 currentLine == 144u -> {
                     logger.i { "VBLANK interrupt requested at scanline $LY" }
                     interruptProvider?.requestInterrupt(0) // VBLANK
                     renderScreen() // Render the whole screen at VBLANK
+                    rendered =  true
                 }
+
                 currentLine > 153u -> {
                     logger.v { "Resetting LY to 0 after scanline $LY" }
                     reset = true
@@ -369,5 +375,6 @@ class LCD(
                 LY++
             }
         }
+        return rendered
     }
 }

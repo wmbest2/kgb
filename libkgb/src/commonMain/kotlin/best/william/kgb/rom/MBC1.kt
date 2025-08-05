@@ -20,9 +20,7 @@ class MBC1(
     val rom: BankedRom
     var ramEnabled = false // RAM enable flag, set by writing to 0x0000-0x1FFF
     var ramBankNumber = 0
-    val rtcEnabled: Boolean = false
-    val rtcRegisterSelector = 0
-    val rtcRegisters: UByteArray = UByteArray(5) // RTC registers (
+    var bankingMode = 0 // 0 = ROM banking, 1 = RAM banking
     val ramBanks = List(4) { UByteArray(0x2000) } // 4 RAM banks of 8KB each
 
     init {
@@ -38,13 +36,14 @@ class MBC1(
         return when (position) {
             in 0x0000u..0x7FFFu -> rom[position]
             in 0xA000u..0xBFFFu -> {
-                if (ramEnabled) {
-                    ramBanks[ramBankNumber][position.toInt() - 0xA000] // Get from the selected RAM bank
+                if (ramEnabled && ram) {
+                    val ramBank = if (bankingMode == 0) 0 else ramBankNumber
+                    ramBanks[ramBank % ramBanks.size][position.toInt() - 0xA000]
                 } else {
-                    0xFFu // Return 0xFF if RAM is disabled
+                    0xFFu
                 }
             }
-            else -> throw IndexOutOfBoundsException("Position $position is out of bounds for MBC3")
+            else -> throw IndexOutOfBoundsException("Position $position is out of bounds for MBC1")
         }
     }
 
@@ -66,17 +65,22 @@ class MBC1(
                 )
             }
             in 0x4000u..0x5FFFu -> {
-                if (ramEnabled) {
-                    ramBankNumber = value.toInt() // Set RAM bank number
-                } else {
+                if (bankingMode == 0) {
                     rom.setHighBits(value.toUInt())
+                } else {
+                    ramBankNumber = value.toInt() // Set RAM bank number
                 }
             }
             in 0x6000u..0x7FFFu -> {
-                // MBC1 does not use this range, but we can handle it if needed
+                // Banking mode select
+                bankingMode = value.toInt() and 0x01
             }
-            in 0xA000u..0xBFFFu -> ramBanks[ramBankNumber][position.toInt() - 0xA000] = value
-            else -> throw IndexOutOfBoundsException("Position $position is out of bounds for MBC3")
+            in 0xA000u..0xBFFFu -> {
+                if (ramEnabled && ram) {
+                    val ramBank = if (bankingMode == 0) 0 else ramBankNumber
+                    ramBanks[ramBank % ramBanks.size][position.toInt() - 0xA000] = value
+                }
+            }
         }
     }
 }

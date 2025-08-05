@@ -74,6 +74,9 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
     }
 
     override fun render(pixels: UByteArray) {
+        val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toLong() // ~16,753,441 ns
+        val frameStart = System.nanoTime()
+
         pixels.copyInto(screenBuffer)
 
         GLFW.glfwPollEvents()

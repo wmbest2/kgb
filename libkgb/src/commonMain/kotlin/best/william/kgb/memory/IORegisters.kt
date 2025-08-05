@@ -79,8 +79,7 @@ class IORegisters: IMemory {
         get() = CPURegisters?.IF ?: 0u
         set(value) { CPURegisters?.IF = value }
 
-    override val addressRange: UIntRange
-        inline get() = 0xFF00u..0xFF7Fu
+    override val addressRange: UIntRange = 0xFF00u..0xFF7Fu
 
     override fun set(position: UShort, value: UByte) = when(position.toUInt()) {
         0xFF00u -> JOYP = value

@@ -26,7 +26,7 @@ kotlin {
             }
         }
     }
-    mingwX64("native") {
+    mingwX64("windows") {
         binaries {
             executable()
         }
@@ -60,7 +60,11 @@ kotlin {
             }
         }
         val jvmTest by getting
-        val nativeMain by getting
-        val nativeTest by getting
+        val windowsMain by getting {
+            dependencies {
+
+            }
+        }
+        val windowsTest by getting
     }
 }

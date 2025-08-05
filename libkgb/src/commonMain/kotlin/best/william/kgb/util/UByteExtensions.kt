@@ -1,13 +1,13 @@
 package kgb.util
 
 @ExperimentalUnsignedTypes
-private val ubyteMasks: Array<UByte> = arrayOf(
+val ubyteMasks: Array<UByte> = arrayOf(
         0x01u, 0x02u, 0x04u, 0x08u,
         0x10u, 0x20u, 0x40u, 0x80u
 )
 
 @ExperimentalUnsignedTypes
-private val ubyteInvertedMasks: Array<UByte> = ubyteMasks.map { it.inv() }.toTypedArray()
+val ubyteInvertedMasks: Array<UByte> = ubyteMasks.map { it.inv() }.toTypedArray()
 
 @ExperimentalUnsignedTypes
 val UByte.Companion.masks
@@ -18,17 +18,13 @@ val UByte.Companion.invertedMasks
     get() = ubyteInvertedMasks
 
 @ExperimentalUnsignedTypes
-fun UByte.withBit(bit: Int, value: Boolean) =
-        if (value) {
-            this.or(ubyteMasks[bit])
-        } else {
-            this.and(ubyteInvertedMasks[bit])
-        }
+inline fun UByte.withBit(bit: Int, value: Boolean): UByte{
+    return if (value) (this or (1u shl bit).toUByte()) else (this and (1u shl bit).toUByte().inv())
+}
 
 @ExperimentalUnsignedTypes
-fun UByte.bit(bit: Int): Boolean {
-    val mask = ubyteMasks[bit]
-    return (this and mask) != 0u.toUByte()
+inline fun UByte.bit(bit: Int): Boolean {
+    return (this.toInt() shr bit) and 1 != 0
 }
 
 @ExperimentalUnsignedTypes

@@ -26,7 +26,7 @@ class LCD(
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Warn,
+            minSeverity = Severity.Error,
         ),
         tag = "LCD"
     )
@@ -99,8 +99,15 @@ class LCD(
     val oam: IMemory
         get() = object : IMemory {
             val data = UByteArray(160) // OAM data is 160 bytes (40 sprites * 4 bytes each)
+            private val MODE_2 = 2u.toUByte()
+            private val MODE_3 = 3u.toUByte()
+
+            private inline fun checkOAMBug(): Boolean {
+                return enableOAMBug && (mode == MODE_2 || mode == MODE_3)
+            }
+
             override fun get(position: UShort): UByte {
-                if (enableOAMBug && mode.toUInt() in arrayOf(0x2u, 0x03u)) {
+                if (checkOAMBug()) {
                     // OAM Bug: Read during mode 2 or 3 returns 0xFF
                     logger.w { "OAM read ignored in mode $mode at position $position" }
                     return 0xFFu
@@ -112,7 +119,7 @@ class LCD(
             }
 
             override fun set(position: UShort, value: UByte) {
-                if (enableOAMBug && mode.toUInt() in arrayOf(0x2u, 0x03u)) {
+                if (checkOAMBug()) {
                     // OAM Bug: Write to OAM during mode 2 or 3 is ignored
                     logger.w { "OAM write ignored in mode $mode at position $position" }
                 } else {
@@ -122,10 +129,28 @@ class LCD(
                 }
             }
 
-            override val addressRange: UIntRange
-                get() = 0xFE00u..0xFE9Fu // OAM range
+            override val addressRange: UIntRange = 0xFE00u..0xFE9Fu // OAM range
         }
     // endregion
+
+    fun reset() {
+        logger.i { "Resetting LCD state" }
+        LCDC = 0x91u // Default LCDC value
+        STAT = 0x85u // Default STAT value
+        scrollX = 0u
+        scrollY = 0u
+        LY = 0u
+        LYC = 0u
+        _dma = 0u
+        BGP = 0u
+        OBP0 = 0u
+        OBP1 = 0u
+        WY = 0u
+        WX = 0u
+        scanlineCounter = 456 // Start with the first scanline ready to draw
+        frameCycleCounter = 0 // Reset frame cycle counter
+    }
+
 
     private var scanlineCounter = 0
     private var frameCycleCounter = 0 // Track cycles for the current frame
@@ -144,12 +169,19 @@ class LCD(
                 val bgTileMapBase = if (BGTileMapSelect) 0x9C00u else 0x9800u
                 val tileDataBase = if (BGWindowTileDataSelect) 0x8000u else 0x8800u
 
-                val (tileMapBase, scrolledX, scrolledY) = if (useWindow) {
-                    val winX = x - (WX - 7u)
-                    val winY = line - WY
-                    Triple(winTileMapBase, winX, winY)
+
+                var tileMapBase: UInt
+                var scrolledX: UInt
+                var scrolledY: UInt
+
+                val tileMapInfo = if (useWindow) {
+                    tileMapBase = winTileMapBase
+                    scrolledX = x - (WX - 7u)
+                    scrolledY = line - WY
                 } else {
-                    Triple(bgTileMapBase, (x + scrollX) and 0xFFu, (line + scrollY) and 0xFFu)
+                    tileMapBase = bgTileMapBase
+                    scrolledX = (x + scrollX) and 0xFFu
+                    scrolledY = (line + scrollY) and 0xFFu
                 }
 
                 val tileMapX = scrolledX / 8u
@@ -227,6 +259,7 @@ class LCD(
                 val tileAddr = 0x8000u + (actualTileIndex * 16u + actualPixelY * 2u)
                 val byte1 = memory[(tileAddr).toUShort()]
                 val byte2 = memory[(tileAddr + 1u).toUShort()]
+                val ZERO = 0u.toUByte() // Transparent color
 
                 for (px in 0u until 8u) {
                     val x = if (!xFlip) px else 7u - px
@@ -241,7 +274,7 @@ class LCD(
                     // Fixed priority logic:
                     // - If priority = false (0), sprite is always in front
                     // - If priority = true (1), sprite is behind background unless background is color 0
-                    val bgIsTransparent = pixels[screenX.toInt()].toUInt() == 0u
+                    val bgIsTransparent = pixels[screenX.toInt()] == ZERO
                     if (!priority || bgIsTransparent) {
                         pixels[screenX.toInt()] = shade
                     }

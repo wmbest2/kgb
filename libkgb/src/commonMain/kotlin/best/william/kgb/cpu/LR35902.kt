@@ -62,6 +62,32 @@ class LR35902(
 
     private val interruptVectors = listOf(0x40u, 0x48u, 0x50u, 0x58u, 0x60u)
 
+    fun reset() {
+        logger.i { "Resetting CPU" }
+        programCounter = 0x0000u
+        stackPointer = 0xFFFEu
+        F = 0xB0u // Set default flags: Z=0, N=0, H=1, C=0
+        A = 0x01u // Set A to 1 as per boot ROM
+        B = 0x00u
+        C = 0x13u // Set C to 19 (0x13) as per boot ROM
+        D = 0x00u
+        E = 0xD8u // Set E to 216 (0xD8) as per boot ROM
+        H = 0x01u // Set H to 1 as per boot ROM
+        L = 0x4Du // Set L to 77 (0x4D) as per boot ROM
+
+        HALT = false
+        STOPPED = false
+        interruptsEnabled = false
+        enableInterruptsAfterNextInstruction = false
+
+        DIV = 0u
+        TIMA = 0u
+        TMA = 0u
+        TAC = 0u
+
+        logger.i { "CPU reset complete" }
+    }
+
     private fun pushStack(value: UShort) {
         memory[--stackPointer] = value.highByte
         memory[--stackPointer] = value.lowByte
@@ -182,15 +208,14 @@ class LR35902(
             logger.d {
                 buildString {
                     var cbDebug = ""
-                    if (memory[programCounter].toUInt() == 0xCBu) {
+                    val opcode = memory[programCounter].toUInt()
+                    if (opcode == 0xCBu) {
                         cbDebug = memory[(programCounter+1u).toUShort()].toUInt().toCBAssemblyString()
                     }
                     append("PC: 0x${programCounter.toString(16)}")
-                    var opcode: UInt
                     val time = measureTime {
                         val execution = performStep()
-                        opcode = execution.first
-                        cycles = execution.second
+                        cycles = execution
                     }
                     append(" OPCODE: 0x${opcode.toString(16)}")
                     if (cbDebug.isNotEmpty()) {
@@ -203,14 +228,14 @@ class LR35902(
             }
             cycles
         } else {
-            performStep().second
+            performStep()
         }
         handleTimers(cycles)
 
         return cycles
     }
 
-    private fun performStep(): Pair<UInt, Int> {
+    private fun performStep(): Int {
         // HALT and STOPPED are now handled in step(), not here
         val opcode = memory[programCounter++].toUInt()
 
@@ -304,7 +329,7 @@ class LR35902(
             else -> TODO("Implement Opcode '${opcode.toString(16)}'\n${this}")
         }
 
-        return opcode to cycles
+        return cycles
     }
 
     private fun executeCB(): Int {
@@ -403,7 +428,7 @@ class LR35902(
         return 4
     }
 
-    private fun compare(value: UByte): Int {
+    private inline fun compare(value: UByte): Int {
         zeroBit = A == value
         carryBit = A < value
         // For subtraction, half-carry is set when there's a borrow from bit 4
@@ -1153,7 +1178,7 @@ class LR35902(
      *
      * This simplifies read commands to a single call
      */
-    private fun readRegisterBy(offset: UInt): UByte {
+    private inline fun readRegisterBy(offset: UInt): UByte {
         return when (offset) {
             0x7u -> A
             0x0u -> B

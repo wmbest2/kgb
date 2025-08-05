@@ -14,11 +14,15 @@ class UByteArrayMemory(
         data
     }
 
-    override fun set(position: UShort, value: UByte) {
+    fun clear() {
+        internalMemory.fill(0u)
+    }
+
+    override operator fun set(position: UShort, value: UByte) {
         internalMemory[(position - addressRange.start).toInt()] = value
     }
 
-    override fun get(position: UShort): UByte {
+    override operator fun get(position: UShort): UByte {
         if (position !in addressRange) {
             throw IndexOutOfBoundsException("Position ${position.toHexString()} is out of bounds for UByteArrayMemory with range ${addressRange.debug}")
         }

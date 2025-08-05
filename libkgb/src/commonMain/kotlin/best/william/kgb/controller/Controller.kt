@@ -3,7 +3,7 @@ package best.william.kgb.controller
 import kgb.cpu.InterruptProvider
 import kgb.util.bit
 
-abstract class Controller(val interruptProvider: InterruptProvider) {
+abstract class Controller() {
 
     // Represents the state of all of the buttons on the controller.
     // A, B, Select, Start, Up, Down, Left, Right.
@@ -59,8 +59,10 @@ abstract class Controller(val interruptProvider: InterruptProvider) {
             field = (value and 0xF0u) or 0xCFu // Keep the upper nibble and set bits 7-6 to 1
         }
 
+    var interruptProvider: InterruptProvider? = null
+
     fun handledInput() {
         // Default implementation returns false, can be overridden
-        interruptProvider.requestInterrupt(4)
+        interruptProvider?.requestInterrupt(4)
     }
 }

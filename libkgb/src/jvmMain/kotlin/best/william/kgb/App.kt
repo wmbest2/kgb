@@ -39,6 +39,7 @@ fun main() {
             // Emulate CPU cycles and update LCD
             val renderedFrame = gameboy.update()
             // If a frame was rendered, we wait to maintain a consistent frame rate
+            renderer.refresh()
             if (renderedFrame) {
                 var elapsed = System.nanoTime() - previousFrameStart
                 val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toLong()

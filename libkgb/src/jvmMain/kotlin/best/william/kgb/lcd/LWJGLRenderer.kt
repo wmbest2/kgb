@@ -26,6 +26,13 @@ class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
     private var lastFpsTime = System.currentTimeMillis()
     private var currentFps = 0.0
 
+    private var dirty = false // Track if the frame buffer has changed
+
+    var frameBuffer = UByteArray(width * height) // Frame buffer for rendering
+
+    private var textureId: Int = 0
+    private val pixelBuffer = java.nio.ByteBuffer.allocateDirect(width * height * 3)
+
     init {
         if (!GLFW.glfwInit()) throw RuntimeException("Unable to initialize GLFW")
         window = GLFW.glfwCreateWindow(width * scale, height * scale, "Game Boy LCD", 0, 0)
@@ -33,6 +40,15 @@ class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
         GLFW.glfwMakeContextCurrent(window)
         GL.createCapabilities()
         GL11.glClearColor(0f, 0f, 0f, 0f)
+
+        textureId = GL11.glGenTextures()
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST)
+        GL11.glTexImage2D(
+            GL11.GL_TEXTURE_2D, 0, GL11.GL_RGB, width, height, 0,
+            GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, null as java.nio.ByteBuffer?
+        )
     }
 
     // Map keys to Game Boy buttons
@@ -78,10 +94,39 @@ class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
     }
 
     override fun render(pixels: UByteArray) {
+        pixels.copyInto(frameBuffer)
+        dirty = true // Mark the frame buffer as dirty
+    }
+
+    fun updateTexture() {
+        pixelBuffer.clear()
+        for (i in frameBuffer.indices) {
+            val shade = frameBuffer[i].toInt() and 0xFF
+            val color = when (shade) {
+                0 -> white
+                1 -> lightGray
+                2 -> darkGray
+                else -> black
+            }
+            pixelBuffer.put((color[0] * 255).toInt().toByte())
+            pixelBuffer.put((color[1] * 255).toInt().toByte())
+            pixelBuffer.put((color[2] * 255).toInt().toByte())
+        }
+        pixelBuffer.flip()
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId)
+        GL11.glTexSubImage2D(
+            GL11.GL_TEXTURE_2D, 0, 0, 0, width, height,
+            GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, pixelBuffer
+        )
+    }
+
+    fun refresh() {
+        if (!dirty) return // Only render if the frame buffer has changed
 
         GLFW.glfwPollEvents()
-
         checkInput()
+        dirty = false
+
         // Update FPS calculation
         frameCount++
         val currentTime = System.currentTimeMillis()
@@ -94,31 +139,16 @@ class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
         }
 
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
-
-        // Fixed rendering - removed duplicate glBegin calls
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val idx = y * width + x
-                val shade = pixels[idx].toInt() and 0xFF
-                val color = when (shade) {
-                    0 -> white // White
-                    1 -> lightGray // Light gray
-                    2 -> darkGray // Dark gray
-                    else -> black // Black
-                }
-                GL11.glColor3f(color[0], color[1], color[2])
-                val x0 = (x.toFloat() / width) * 2f - 1f
-                val y0 = ((height - 1 - y).toFloat() / height) * 2f - 1f
-                val x1 = ((x + 1).toFloat() / width) * 2f - 1f
-                val y1 = ((height - y).toFloat() / height) * 2f - 1f
-                GL11.glBegin(GL11.GL_QUADS)
-                GL11.glVertex2f(x0, y0)
-                GL11.glVertex2f(x1, y0)
-                GL11.glVertex2f(x1, y1)
-                GL11.glVertex2f(x0, y1)
-                GL11.glEnd()
-            }
-        }
+        updateTexture()
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId)
+        GL11.glBegin(GL11.GL_QUADS)
+        GL11.glTexCoord2f(0f, 1f); GL11.glVertex2f(-1f, -1f)
+        GL11.glTexCoord2f(1f, 1f); GL11.glVertex2f(1f, -1f)
+        GL11.glTexCoord2f(1f, 0f); GL11.glVertex2f(1f, 1f)
+        GL11.glTexCoord2f(0f, 0f); GL11.glVertex2f(-1f, 1f)
+        GL11.glEnd()
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
         GLFW.glfwSwapBuffers(window)
     }
 

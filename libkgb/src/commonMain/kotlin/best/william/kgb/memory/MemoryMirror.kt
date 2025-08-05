@@ -14,9 +14,7 @@ class MemoryMirror(
         }
 
     private val mappedAddressRange: UIntRange
-        get() {
-            return (addressRange.start.toInt() + mirrorOffset).toUInt()..(addressRange.endInclusive.toInt() + mirrorOffset).toUInt()
-        }
+            =  (addressRange.start.toInt() + mirrorOffset).toUInt()..(addressRange.endInclusive.toInt() + mirrorOffset).toUInt()
 
     init {
         if (addressRange.isEmpty()) {
@@ -28,17 +26,11 @@ class MemoryMirror(
 
 
     override fun set(position: UShort, value: UByte) {
-        if (position < addressRange.start.toUShort() || position > addressRange.endInclusive.toUShort()) {
-            throw IndexOutOfBoundsException("Position $position is out of bounds for memory range $addressRange")
-        }
         val mirroredPosition = (position.toInt() + mirrorOffset)
         mirroredIMemory[mirroredPosition.toUShort()] = value
     }
 
     override fun get(position: UShort): UByte {
-        if (position < addressRange.start.toUShort() || position > addressRange.endInclusive.toUShort()) {
-            throw IndexOutOfBoundsException("Position $position is out of bounds for memory range $addressRange")
-        }
         val mirroredPosition = (position.toInt() + mirrorOffset)
         return mirroredIMemory[mirroredPosition.toUShort()]
     }

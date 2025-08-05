@@ -15,6 +15,7 @@ class MemoryMapper(
             field = value
             memoryMapSize = field.size
         }
+
     private var memoryMapSize: Int = 0
 
     var cartridge: Cartridge? = null

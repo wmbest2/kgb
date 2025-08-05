@@ -61,5 +61,5 @@ data class Registers(
         }
 }
 
-fun asWord(low: UByte, high: UByte) =
+inline fun asWord(low: UByte, high: UByte) =
     (((high.toUInt() shl 8) or low.toUInt()).toUShort())

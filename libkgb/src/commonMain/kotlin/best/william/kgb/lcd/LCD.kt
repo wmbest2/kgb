@@ -166,9 +166,10 @@ class LCD(
             val winTileMapBase = if (WindowTileMapSelect) 0x9C00u else 0x9800u
             val bgTileMapBase = if (BGTileMapSelect) 0x9C00u else 0x9800u
             val tileDataBase = if (BGWindowTileDataSelect) 0x8000u else 0x8800u
+            val windowEnabled = WindowEnabled
 
             for (x in 0u until 160u) {
-                val useWindow = WindowEnabled && x + 7u >= WX && WY <= line
+                val useWindow = windowEnabled && x + 7u >= WX && WY <= line
 
                 var tileMapBase: UInt
                 var scrolledX: UInt

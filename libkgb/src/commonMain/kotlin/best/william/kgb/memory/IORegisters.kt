@@ -20,8 +20,7 @@ class InterruptEnabledMemory(): IMemory {
         CPURegisters = ir
     }
 
-    override val addressRange: UIntRange
-        inline get() = 0xFFFFu..0xFFFFu // Only IE register
+    override val addressRange: UIntRange = 0xFFFFu..0xFFFFu // Only IE register
     override fun set(position: UShort, value: UByte) {
         if (position.toUInt() == 0xFFFFu) {
             println("Setting IE register at position ${position.toHexString()} to value ${value.toHexString() })}")

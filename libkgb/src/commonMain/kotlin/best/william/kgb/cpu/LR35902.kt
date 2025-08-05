@@ -15,15 +15,16 @@ import kotlin.time.measureTime
 
 @ExperimentalUnsignedTypes
 class LR35902(
-    val memory: IMemory,
     registers: IRegisters = Registers()
 ): IRegisters by registers, InterruptProvider, CPURegisters {
+
+    lateinit var memory: IMemory
 
     val scheduler = newSingleThreadContext("MyOwnThread")
     private val logger = Logger(
         config = loggerConfigInit(
             platformLogWriter(NoTagFormatter),
-            minSeverity = Severity.Error,
+            minSeverity = Severity.Warn,
         ),
         tag= "LR35902"
     )
@@ -46,6 +47,10 @@ class LR35902(
     private var STOPPED = false
     private var interruptsEnabled = false
     private var enableInterruptsAfterNextInstruction = false
+        set(value) {
+            if (value) interruptsEnabled = false
+            field = value
+        }
     // endregion
 
     override var IF: UByte = 0u
@@ -73,14 +78,15 @@ class LR35902(
         val iflags = IF
 
         // STOPPED mode can be exited by joypad interrupt regardless of interrupt enable state
-        if (STOPPED && (iflags and 0x10u.toUByte()) != 0u.toUByte()) {
+        if (STOPPED && (iflags and 0x1Fu.toUByte()) != 0u.toUByte()) {
             STOPPED = false
+            logger.d { "Exiting STOPPED due to interrupt - IF: 0x${IF.toString(16)}, IE: 0x${IE.toString(16)}, IME: $interruptsEnabled" }
         }
 
         // HALT mode can be exited by any enabled interrupt, even if IME is false
         if (HALT && (ie and iflags) != 0u.toUByte()) {
             HALT = false
-            logger.i { "Exiting HALT due to pending interrupt - IF: 0x${IF.toString(16)}, IE: 0x${IE.toString(16)}, IME: $interruptsEnabled" }
+            logger.d { "Exiting HALT due to pending interrupt - IF: 0x${IF.toString(16)}, IE: 0x${IE.toString(16)}, IME: $interruptsEnabled" }
         }
 
         // Only service interrupts if IME is enabled
@@ -90,15 +96,19 @@ class LR35902(
             val mask = (1u shl i).toUByte()
             if ((ie and mask) != 0u.toUByte() && (iflags and mask) != 0u.toUByte()) {
 
-                logger.d { "Handling interrupt ${i + 1})" }
+                logger.d { "Handling interrupt ${mask.toHexString()})" }
 
                 interruptsEnabled = false
                 // Clear IF flag for this interrupt
                 IF = iflags and mask.inv()
                 // Push PC to stack
                 pushStack(programCounter)
+
+                logger.i { "Pushing PC to stack: 0x${programCounter.toString(16)}" }
                 // Jump to interrupt vector
                 programCounter = interruptVectors[i].toUShort()
+
+                logger.i { "Jumping to interrupt vector: 0x${programCounter.toString(16)}" }
                 // Exit HALT state if we were halted
                 HALT = false
                 break
@@ -148,18 +158,23 @@ class LR35902(
 
         handleInterrupts()
 
-        if (enableInterruptsAfterNextInstruction) {
-            interruptsEnabled = true
-            logger.d { "Interrupts enabled after next instruction" }
-            enableInterruptsAfterNextInstruction = false
-        }
-
         // Check if we're in HALT or STOPPED state
         if (HALT || STOPPED) {
+            if (HALT) {
+                logger.d { "CPU is HALTed, waiting for interrupt" }
+            } else if (STOPPED) {
+                logger.d { "CPU is STOPPED, waiting for joypad input" }
+            }
             // In HALT/STOPPED state, still advance timers but don't execute instructions
             val cycles = 4
             handleTimers(cycles)
             return cycles
+        }
+
+        if (enableInterruptsAfterNextInstruction) {
+            interruptsEnabled = true
+            logger.d { "Interrupts enabled after next instruction" }
+            enableInterruptsAfterNextInstruction = false
         }
 
         val cycles = if (programCounter >= 0x0100u && logger.config.minSeverity <= Severity.Debug) {
@@ -191,6 +206,7 @@ class LR35902(
             performStep().second
         }
         handleTimers(cycles)
+
         return cycles
     }
 
@@ -502,8 +518,7 @@ class LR35902(
     private fun `LD HL, SP+r8`(): Int {
         val offset = memory[programCounter++].toByte()
         val originalSP = stackPointer
-        val result = (originalSP.toInt() + offset).toUInt()
-        HL = result.toUShort()
+        HL = (originalSP.toInt() + offset).toUShort()
 
         // LD HL, SP+r8 always clears Z and N flags
         zeroBit = false
@@ -567,7 +582,8 @@ class LR35902(
         val writeOffset = (opcode - 0x40u) / 8u
         val readOffset = opcode % 8u
         writeRegisterBy(writeOffset, readRegisterBy(readOffset))
-        return 8 // LD r1, r2
+        // If either register is (HL), timing is 8 cycles for registers, 12 for (HL)
+        return if (writeOffset == 6u || readOffset == 6u) 12 else 4
     }
     // endregion
 
@@ -596,7 +612,6 @@ class LR35902(
             0x3Cu -> ++A
             else -> TODO()
         }
-
         val original = result - 1u
 
         zeroBit = result == UByte.ZERO
@@ -604,7 +619,8 @@ class LR35902(
         // This happens when the lower nibble of the original value is 0xF
         halfCarryBit = (original and 0x0Fu) == 0x0Fu
         subtractBit = false
-        return 8 // INC n
+        // INC (HL) should take 12 cycles, registers 4 cycles
+        return if (opcode == 0x34u) 12 else 4
     }
 
     private fun `DEC nn`(opcode: UInt): Int {
@@ -638,7 +654,8 @@ class LR35902(
         halfCarryBit = (original and 0x0Fu) == 0u.toUByte()
         subtractBit = true
 
-        return 8 // DEC n
+        // DEC (HL) should take 12 cycles, registers 4 cycles
+        return if (opcode == 0x35u) 12 else 4
     }
 
     private fun `ADD A r`(opcode: UInt): Int {
@@ -756,11 +773,12 @@ class LR35902(
     private fun sbc(value: UByte) {
         val carry = if (carryBit) 1u else 0u
         val original = A
-        val result = original - value - carry
+        val result = original.toUInt() - value.toUInt() - carry
         A = result.toUByte()
         zeroBit = A == UByte.ZERO
-        carryBit = original.toUInt() < result
+        carryBit = original.toUInt() < (value.toUInt() + carry)
         // For subtraction, half-carry is set when there's a borrow from bit 4
+        // This happens when the lower nibble of the original value is 0
         halfCarryBit = (original and 0x0Fu) < ((value and 0x0Fu) + carry.toUByte())
         subtractBit = true
     }
@@ -860,12 +878,18 @@ class LR35902(
     private fun RRA() = `RR n`(0x1Fu, false)
     private fun RRCA() = `RRC n`(0x0Fu, false)
 
+    // CB-prefixed instruction helpers
+    private fun cbTiming(offset: UInt): Int {
+        // (HL) is offset 6
+        return if (offset == 6u) 16 else 8
+    }
+
     private fun `RL n`(opcode: UInt, setZero: Boolean = true): Int {
         val offset = opcode % 8u
 
         val registerData = readRegisterBy(offset)
         writeRegisterBy(offset, rotate(Direction.LEFT, registerData, setZero, false))
-        return 8 // RL n
+        return cbTiming(offset)
     }
 
     private fun `RLC n`(opcode: UInt, setZero: Boolean = true): Int {
@@ -873,7 +897,7 @@ class LR35902(
 
         val registerData = readRegisterBy(offset)
         writeRegisterBy(offset, rotate(Direction.LEFT, registerData, setZero, true))
-        return 8 // RLC n
+        return cbTiming(offset)
     }
 
     private fun `RR n`(opcode: UInt, setZero: Boolean = true): Int {
@@ -881,7 +905,7 @@ class LR35902(
 
         val registerData = readRegisterBy(offset)
         writeRegisterBy(offset, rotate(Direction.RIGHT, registerData, setZero, false))
-        return 8 // RR n
+        return cbTiming(offset)
     }
 
     private fun `RRC n`(opcode: UInt, setZero: Boolean = true): Int {
@@ -889,7 +913,7 @@ class LR35902(
 
         val registerData = readRegisterBy(offset)
         writeRegisterBy(offset, rotate(Direction.RIGHT, registerData, setZero, true))
-        return 8 // RLR n
+        return cbTiming(offset)
     }
 
     private enum class Direction {
@@ -937,7 +961,7 @@ class LR35902(
         halfCarryBit = false
         zeroBit = output == UByte.ZERO
         subtractBit = false
-        return 8 // SLA n
+        return cbTiming(offset)
     }
 
     private fun `SRA n`(opcode: UInt): Int {
@@ -954,7 +978,7 @@ class LR35902(
         halfCarryBit = false
         zeroBit = output == UByte.ZERO
         subtractBit = false
-        return 8 // SRA n
+        return cbTiming(offset)
     }
 
     private fun `SWAP n`(opcode: UInt): Int {
@@ -966,7 +990,7 @@ class LR35902(
         halfCarryBit = false
         zeroBit = value == UByte.ZERO
         subtractBit = false
-        return 8 // SWAP n
+        return cbTiming(offset)
     }
 
     private fun `SRL n`(opcode: UInt): Int {
@@ -975,14 +999,13 @@ class LR35902(
         val registerData = readRegisterBy(offset)
         val oldZero = registerData.bit(0)
         val value = registerData.toUInt() shr 1
-
         val output = value.withBit(7, false).toUByte() // Shift left setting the 0 bit to the carryBit
         writeRegisterBy(offset, output)
         carryBit = oldZero
         halfCarryBit = false
         zeroBit = output == UByte.ZERO
         subtractBit = false
-        return 8 // SRL n
+        return cbTiming(offset)
     }
 
     private fun `BIT b n`(opcode: UInt): Int {
@@ -992,21 +1015,21 @@ class LR35902(
         halfCarryBit = true
         subtractBit = false
         zeroBit = !readRegisterBy(offset).bit(bit.toInt())
-        return 8 // BIT b, n
+        return cbTiming(offset)
     }
 
     private fun `RES b n`(opcode: UInt): Int {
         val offset = opcode % 8u
         val bit = (opcode - 0x80u) / 8u
         setBitForRegisterTo(offset, bit.toInt(), false)
-        return 8 // RES b, n
+        return cbTiming(offset)
     }
 
     private fun `SET b n`(opcode: UInt): Int {
         val offset = opcode % 8u
         val bit = (opcode - 0xC0u) / 8u
         setBitForRegisterTo(offset, bit.toInt(), true)
-        return 8 // SET b, n
+        return cbTiming(offset)
     }
     //endregion
 
@@ -1169,8 +1192,8 @@ class LR35902(
     }
 
     override fun requestInterrupt(interruptID: Int) {
+
         // Ignore JOYPAD interrupt if not stopped
-        if (interruptID == 2 && !STOPPED) return
         IF = IF or ((1u shl interruptID).toUByte())
     }
 }

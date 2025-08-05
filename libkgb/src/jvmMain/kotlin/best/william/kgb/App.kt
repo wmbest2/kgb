@@ -1,5 +1,6 @@
 package best.william.kgb
 
+import best.william.kgb.lcd.LWJGLRenderer
 import best.william.kgb.memory.MemoryMirror
 import best.william.kgb.rom.loadCartridge
 import kgb.lcd.LCD
@@ -18,10 +19,11 @@ fun main() {
     val bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRomBytes)
     // Rom range: 0x0100 to 0x7FFF
     // Optional Rom Bank 0x8000 to 0x9FFF
-    //val rom = File("../reference/roms/test/cpu_instrs/individual/02-interrupts.gb").loadAsRom()
-    //val rom = File("../reference/roms/test/oam_bug/rom_singles/1-lcd_sync.gb").loadAsRom()
-    //val rom = File("../reference/roms/test/cpu_instrs.gb").loadAsRom()
-    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
+    //val cartridge = File("../reference/roms/test/cpu_instrs/individual/02-interrupts.gb").loadCartridge()
+    //val cartridge = File("../reference/roms/test/oam_bug/oam_bug.gb").loadCartridge()
+//    val cartridge = File("../reference/roms/test/interrupt_time/interrupt_time.gb").loadCartridge()
+    val cartridge = File("../reference/roms/test/cpu_instrs.gb").loadCartridge()
+    //val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
     val wram = UByteArrayMemory(0xC000u..0xDFFFu)
@@ -37,27 +39,31 @@ fun main() {
     val hram = UByteArrayMemory(0xFF80u..0xFFFEu)
     val interruptEnabledMemory = InterruptEnabledMemory()
 
+    val cpu = CPU()
+    val renderer = LWJGLRenderer(cpu)
+    val lcd = LCD(renderer)
+
     val memoryMap = MemoryMapper(
         bootRom, // Boot ROM is usually only used for the first few cycles
         vram, // Video RAM 0x8000 to 0x9FFF
         wram,
         echoRam,
-        oam,
+        lcd.oam,
         ioRegisters,
         hram,
-        interruptEnabledMemory,
-        *cartridge.getMemoryChunks()
+        *cartridge.getMemoryChunks(),
+        interruptEnabledMemory
     )
+
+    cpu.memory = memoryMap
+    lcd.memory = memoryMap
 
     cartridge.getMemoryChunks().forEach { println("${it.addressRange.start.toString(16)}:${it.addressRange.endInclusive.toString(16)}") }
 
-    val cpu = CPU(memoryMap)
-    val renderer = best.william.kgb.lcd.LWJGLRenderer(cpu)
-    val lcd = LCD(memoryMap, renderer)
 
 
-    ioRegisters.attachCPURegisters(cpu)
     interruptEnabledMemory.attachInterruptRegisters(cpu)
+    ioRegisters.attachCPURegisters(cpu)
     ioRegisters.attachController(renderer)
     ioRegisters.attachLCD(lcd)
 

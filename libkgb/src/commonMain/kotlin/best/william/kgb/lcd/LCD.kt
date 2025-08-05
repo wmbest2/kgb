@@ -20,8 +20,8 @@ interface LCDRenderer {
 
 @ExperimentalUnsignedTypes
 class LCD(
-    private val memory: IMemory,
     private val renderer: LCDRenderer,
+    private val enableOAMBug: Boolean = true,
 ) {
     private val logger = Logger(
         config = loggerConfigInit(
@@ -32,6 +32,8 @@ class LCD(
     )
 
     private val lineBuffer = UByteArray(160)
+
+    lateinit var memory: IMemory
 
     var interruptProvider: InterruptProvider? = null
     // region Status Flags
@@ -50,6 +52,18 @@ class LCD(
     // region LCD Control
 
     var LCDC: UByte = 91u // 0b01011011
+        set(value) {
+            logger.d { "LCDC set to ${value.toString(2).padStart(8, '0')}" }
+            field = value
+            // When LCDC is disabled, reset LY and mode
+            if (!value.bit(7)) {
+                LY = 0u
+                scanlineCounter = 456
+                STAT = STAT and 0xFCu // Reset mode bits
+                logger.i { "LCDC disabled, LY reset to 0 and mode cleared" }
+            }
+        }
+
     val LCDEnabled by flag(::LCDC, 7)
     val WindowTileMapSelect by flag(::LCDC, 6)
     val WindowEnabled by flag(::LCDC, 5)
@@ -73,7 +87,7 @@ class LCD(
             logger.d { "DMA transfer initiated with value: $value" }
             val startAddress = (value.toInt() shl 8) and 0xFF00
             for (i in 0 until 160) {
-                memory[(0xFE00u + i.toUInt()).toUShort()] = memory[(startAddress + i).toUShort()]
+                oam[(0xFE00u + i.toUInt()).toUShort()] = memory[(startAddress + i).toUShort()]
             }
         }
     var BGP: UByte = 0u
@@ -82,9 +96,38 @@ class LCD(
     var WY: UByte = 0u
     var WX: UByte = 0u
 
+    val oam: IMemory
+        get() = object : IMemory {
+            val data = UByteArray(160) // OAM data is 160 bytes (40 sprites * 4 bytes each)
+            override fun get(position: UShort): UByte {
+                if (enableOAMBug && mode.toUInt() in arrayOf(0x2u, 0x03u)) {
+                    // OAM Bug: Read during mode 2 or 3 returns 0xFF
+                    logger.w { "OAM read ignored in mode $mode at position $position" }
+                    return 0xFFu
+                } else {
+                    // Normal OAM read
+                    logger.v { "OAM read at $position" }
+                    return data[(position - 0xFE00u).toInt()]
+                }
+            }
+
+            override fun set(position: UShort, value: UByte) {
+                if (enableOAMBug && mode.toUInt() in arrayOf(0x2u, 0x03u)) {
+                    // OAM Bug: Write to OAM during mode 2 or 3 is ignored
+                    logger.w { "OAM write ignored in mode $mode at position $position" }
+                } else {
+                    // Normal OAM write
+                    logger.v { "OAM write at $position with value $value" }
+                    data[(position - 0xFE00u).toInt()] = value
+                }
+            }
+
+            override val addressRange: UIntRange
+                get() = 0xFE00u..0xFE9Fu // OAM range
+        }
     // endregion
 
-    private var scanlineCounter = 456
+    private var scanlineCounter = 0
     val pixelBuffer: UByteArray = UByteArray(160 * 144)
 
     private fun drawScanline() {
@@ -298,10 +341,11 @@ class LCD(
 
         if (scanlineCounter <= 0) {
             scanlineCounter += 456
-            val currentLine = (LY++).toUInt()
+            val currentLine = LY.toUInt()
 
             checkAndRequestSTATInterrupt()
 
+            var reset = false
             when {
                 currentLine < 144u -> {
                     logger.v { "Drawing scanline $LY" }
@@ -314,8 +358,15 @@ class LCD(
                 }
                 currentLine > 153u -> {
                     logger.v { "Resetting LY to 0 after scanline $LY" }
-                    LY = 0u
+                    reset = true
                 }
+            }
+
+            // More accurate LY increment logic
+            if (reset) {
+                LY = 0u
+            } else {
+                LY++
             }
         }
     }

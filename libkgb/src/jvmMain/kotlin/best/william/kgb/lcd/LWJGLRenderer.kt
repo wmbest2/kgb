@@ -46,15 +46,15 @@ class LWJGLRenderer(interruptProvider: InterruptProvider) : LCDRenderer, Control
 
         val inputChanged = keys.withIndex()
             .map { (i, key) ->
-                checkKey(key, i)
+                val output = checkKey(key, i)
+                output
             }
-            .any()
+            .any { it }
 
         if (inputChanged) {
             // Only trigger joypad interrupt if system was in a low-power state
             // For most normal gameplay, joypad changes don't trigger interrupts
-            // handledInput() // Remove this call for normal input changes
-            interruptProvider.requestInterrupt(2) // Request joypad interrupt
+            handledInput()
         }
     }
 

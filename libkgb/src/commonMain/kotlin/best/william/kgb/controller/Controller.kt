@@ -61,6 +61,6 @@ abstract class Controller(val interruptProvider: InterruptProvider) {
 
     fun handledInput() {
         // Default implementation returns false, can be overridden
-        interruptProvider.requestInterrupt(2)
+        interruptProvider.requestInterrupt(4)
     }
 }

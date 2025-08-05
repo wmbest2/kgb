@@ -31,7 +31,7 @@ class BankedRom(
         } else {
             //println("Getting value at position ${position.toHexString()} in BankedRom, selected bank: $selectedBank")
             // This is a banked ROM, return the selected bank
-            if (selectedBank <= 0 || selectedBank >= banks.size - 1) {
+            if (selectedBank < 0 || selectedBank >= banks.size) {
                 throw IndexOutOfBoundsException("Selected bank $selectedBank is out of bounds for ${banks.size - 1} banks")
             }
             return currentBank()[(position - 0x4000u).toInt()]
@@ -58,49 +58,6 @@ class RomOnly(
     }
 
     override fun set(position: UShort, value: UByte) {}
-}
-
-class MBC1(
-        bytes: ByteArray,
-        name: String,
-        val ram: Boolean = false,
-        val battery: Boolean = false
-): Cartridge(name) {
-    override val handledAddressRanges: List<UIntRange> = listOf(
-        0x0000u..0x7FFFu,
-        0xA000u..0xBFFFu  // RAM bank (if enabled)
-    )
-
-    val rom: IMemory
-    var ramBank: IMemory? = null
-
-    init {
-        val banks: List<UByteArray> = bytes.toList()
-                .chunked(0x4000)
-                .map { it.toByteArray().toUByteArray() }
-
-        rom = BankedRom(banks)
-
-        if (ram) {
-            ramBank = UByteArrayMemory(0xA000u..0xBFFFu, ByteArray(0x2000).toUByteArray())
-        }
-    }
-
-    override fun get(position: UShort): UByte {
-        return when {
-            position in 0x0000u..0x7FFFu -> rom.get(position)
-            position in 0xA000u..0xBFFFu && ramBank != null -> ramBank!!.get(position)
-            else -> throw IndexOutOfBoundsException("Position $position is out of bounds for MBC1")
-        }
-    }
-
-    override fun set(position: UShort, value: UByte) {
-        when {
-            position in 0x0000u..0x7FFFu -> rom.set(position, value)
-            position in 0xA000u..0xBFFFu && ramBank != null -> ramBank!!.set(position, value)
-            else -> throw IndexOutOfBoundsException("Position $position is out of bounds for MBC1")
-        }
-    }
 }
 
 @ExperimentalUnsignedTypes

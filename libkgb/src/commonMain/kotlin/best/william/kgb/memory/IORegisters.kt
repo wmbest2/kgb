@@ -24,12 +24,15 @@ class InterruptEnabledMemory(): IMemory {
         inline get() = 0xFFFFu..0xFFFFu // Only IE register
     override fun set(position: UShort, value: UByte) {
         if (position.toUInt() == 0xFFFFu) {
+            println("Setting IE register at position ${position.toHexString()} to value ${value.toHexString() })}")
             CPURegisters?.IE = value
         }
     }
     override fun get(position: UShort): UByte {
         return if (position.toUInt() == 0xFFFFu) {
-            CPURegisters?.IE ?: 0u
+            val output = CPURegisters?.IE ?: 0u
+            println("Getting IE register at position ${position.toHexString()} with value ${output.toHexString() })}")
+            output
         } else {
             0u // Invalid position, return 0
         }

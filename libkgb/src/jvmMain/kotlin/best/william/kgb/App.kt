@@ -28,8 +28,8 @@ fun main() {
     //val cartridge = File("../reference/roms/test/oam_bug/oam_bug.gb").loadCartridge()
 //    val cartridge = File("../reference/roms/test/interrupt_time/interrupt_time.gb").loadCartridge()
 //    val cartridge = File("../reference/roms/test/cpu_instrs.gb").loadCartridge()
-//    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
-    val cartridge = File("../reference/roms/super-mario-land.gb").loadCartridge()
+    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
+//    val cartridge = File("../reference/roms/super-mario-land.gb").loadCartridge()
 
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
     val wram = UByteArrayMemory(0xC000u..0xDFFFu)

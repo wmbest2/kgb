@@ -2,8 +2,6 @@
 
 package kgb.rom
 
-import kgb.util.bit
-
 class MBC3(
         bytes: ByteArray,
         name: String,

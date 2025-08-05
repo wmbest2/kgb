@@ -2,9 +2,6 @@
 
 package kgb.rom
 
-import kgb.memory.IMemory
-import kgb.memory.UByteArrayMemory
-
 class MBC1(
         bytes: ByteArray,
         name: String,

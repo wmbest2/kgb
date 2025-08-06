@@ -1,5 +1,6 @@
-package kgb.memory
+package best.william.kgb.memory
 
+import kgb.memory.IMemory
 import kgb.rom.Cartridge
 
 @ExperimentalUnsignedTypes
@@ -10,7 +11,7 @@ class MemoryMapper(
 
     private var bootEnabled = true
 
-    private var fullMemoryMap: List<IMemory> = emptyList()
+    private var fullMemoryMap: Array<IMemory> = emptyArray()
         set(value) {
             field = value
             memoryMapSize = field.size
@@ -22,7 +23,7 @@ class MemoryMapper(
         set(value) {
             field = value
             val cartridgeChunks = value?.getMemoryChunks()?.sortedBy { it.addressRange.first } ?: emptyList()
-            fullMemoryMap = (cartridgeChunks + _memoryChunks).sortedBy { it.addressRange.first }
+            fullMemoryMap = (cartridgeChunks + _memoryChunks).sortedBy { it.addressRange.first }.toTypedArray()
         }
 
     override var addressRange: UIntRange = 0x0000u..0xFFFFu

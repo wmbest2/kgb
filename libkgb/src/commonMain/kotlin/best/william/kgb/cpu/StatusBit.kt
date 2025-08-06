@@ -4,7 +4,6 @@
 
 package best.william.kgb.cpu
 
-import kgb.util.ZERO
 import kgb.util.bit
 import kgb.util.withBit
 import kotlin.reflect.KMutableProperty0

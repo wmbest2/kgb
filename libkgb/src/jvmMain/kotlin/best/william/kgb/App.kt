@@ -1,19 +1,10 @@
 package best.william.kgb
 
+import best.william.kgb.audio.OpenALSpeaker
 import best.william.kgb.lcd.LWJGLRenderer
-import best.william.kgb.memory.MemoryMirror
 import best.william.kgb.rom.loadCartridge
-import kgb.lcd.LCD
-import kgb.memory.IORegisters
-import kgb.memory.InterruptEnabledMemory
-import kgb.memory.MemoryMapper
-import kgb.memory.UByteArrayMemory
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import java.io.File
 import kotlin.time.ExperimentalTime
-import best.william.kgb.cpu.LR35902 as CPU
 
 @ExperimentalTime
 @ExperimentalUnsignedTypes
@@ -22,10 +13,12 @@ fun main() {
     val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
 
     val renderer = LWJGLRenderer()
+    val openALSpeaker = OpenALSpeaker()
     val gameboy = Gameboy(
-        bootRom,
-        renderer,
-        renderer
+        bootRom = bootRom,
+        renderer = renderer,
+        speaker = openALSpeaker,
+        controller = renderer
     )
 
     gameboy.loadCatridge(cartridge)
@@ -38,8 +31,8 @@ fun main() {
         while (!renderer.shouldClose()) {
             // Emulate CPU cycles and update LCD
             val renderedFrame = gameboy.update()
-            // If a frame was rendered, we wait to maintain a consistent frame rate
             renderer.refresh()
+            // If a frame was rendered, we wait to maintain a consistent frame rate
             if (renderedFrame) {
                 var elapsed = System.nanoTime() - previousFrameStart
                 val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toLong()

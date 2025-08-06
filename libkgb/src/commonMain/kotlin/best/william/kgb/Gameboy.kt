@@ -2,6 +2,8 @@
 
 package best.william.kgb
 
+import best.william.kgb.audio.APU
+import best.william.kgb.audio.Speaker
 import best.william.kgb.controller.Controller
 import best.william.kgb.cpu.LR35902 as CPU
 import best.william.kgb.memory.MemoryMirror
@@ -9,13 +11,14 @@ import kgb.lcd.LCD
 import kgb.lcd.LCDRenderer
 import kgb.memory.IORegisters
 import kgb.memory.InterruptEnabledMemory
-import kgb.memory.MemoryMapper
+import best.william.kgb.memory.MemoryMapper
 import kgb.memory.UByteArrayMemory
 import kgb.rom.Cartridge
 
 class Gameboy(
     bootRom: ByteArray,
     renderer: LCDRenderer,
+    speaker: Speaker,
     controller: Controller
 ) {
     val _bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRom.toUByteArray())
@@ -33,6 +36,7 @@ class Gameboy(
     val interruptEnabledMemory = InterruptEnabledMemory()
 
     val cpu = CPU()
+    val apu = APU(speaker = speaker)
     val lcd = LCD(renderer)
 
     val memoryMap = MemoryMapper(
@@ -55,6 +59,7 @@ class Gameboy(
         interruptEnabledMemory.attachInterruptRegisters(cpu)
         ioRegisters.attachCPURegisters(cpu)
         ioRegisters.attachController(controller)
+        ioRegisters.apu = apu
         ioRegisters.attachLCD(lcd)
 
         lcd.interruptProvider = cpu
@@ -66,6 +71,7 @@ class Gameboy(
 
     fun reset() {
         cpu.reset()
+        apu.reset()
         lcd.reset()
         memoryMap.cartridge = null
         vram.clear()
@@ -76,6 +82,7 @@ class Gameboy(
     fun update(): Boolean {
         // Emulate CPU cycles and update LCD
         val cycles = cpu.step()
+        apu.update(cycles)
         return lcd.update(cycles)
     }
 

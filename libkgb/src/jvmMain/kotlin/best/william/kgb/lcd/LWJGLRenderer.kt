@@ -15,7 +15,7 @@ import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11
 import kotlin.coroutines.CoroutineContext
 
-class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
+class LWJGLRenderer() : LCDRenderer, Controller() {
     private var window: Long = 0
     private val width = 160
     private val height = 144
@@ -159,10 +159,6 @@ class LWJGLRenderer() : LCDRenderer, Controller(), InterruptProvider {
     fun dispose() {
         GLFW.glfwDestroyWindow(window)
         GLFW.glfwTerminate()
-    }
-
-    override fun requestInterrupt(interruptID: Int) {
-        TODO("Not yet implemented")
     }
 
     companion object {

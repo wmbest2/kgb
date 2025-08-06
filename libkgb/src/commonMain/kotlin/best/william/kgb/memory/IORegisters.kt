@@ -1,5 +1,6 @@
 package kgb.memory
 
+import best.william.kgb.audio.APU
 import best.william.kgb.controller.Controller
 import kgb.lcd.LCD
 
@@ -44,6 +45,7 @@ class IORegisters: IMemory {
     private var lcd: LCD? = null
     private var CPURegisters: CPURegisters? = null
     private lateinit var controller: Controller
+    lateinit var apu: APU
 
     fun attachLCD(lcd: LCD) {
         this.lcd = lcd
@@ -89,6 +91,35 @@ class IORegisters: IMemory {
         0xFF06u -> TMA = value
         0xFF07u -> TAC = value
         0xFF0Fu -> IF = value
+
+        0xFF10u -> apu.NR10 = value
+        0xFF11u -> apu.NR11 = value
+        0xFF12u -> apu.NR12 = value
+        0xFF13u -> apu.NR13 = value
+        0xFF14u -> apu.NR14 = value
+        0xFF16u -> apu.NR21 = value
+        0xFF17u -> apu.NR22 = value
+        0xFF18u -> apu.NR23 = value
+        0xFF19u -> apu.NR24 = value
+        0xFF1Au -> apu.NR30 = value
+        0xFF1Bu -> apu.NR31 = value
+        0xFF1Cu -> apu.NR32 = value
+        0xFF1Du -> apu.NR33 = value
+        0xFF1Eu -> apu.NR34 = value
+        0xFF20u -> apu.NR41 = value
+        0xFF21u -> apu.NR42 = value
+        0xFF22u -> apu.NR43 = value
+        0xFF23u -> apu.NR44 = value
+        0xFF24u -> apu.NR50 = value
+        0xFF25u -> apu.NR51 = value
+        0xFF26u -> apu.NR52 = value and 0x80u
+
+        // Audio Register
+        in 0xFF30u..0xFF3Fu -> {
+            // Writing to wave RAM, which is used for sound
+            apu.waveRam[(position - 0xFF30u).toInt()] = value
+        }
+
         // LCD registers
         0xFF40u -> lcd?.LCDC = value
         0xFF41u -> lcd?.STAT = value
@@ -104,7 +135,6 @@ class IORegisters: IMemory {
         0xFF4Bu -> lcd?.WX = value
         0xFF50u -> BANK = value
         // Sound registers and others can be stubbed
-        in 0xFF10u..0xFF3Fu -> {} // Sound stub
         else -> {}
     }
 
@@ -117,6 +147,34 @@ class IORegisters: IMemory {
         0xFF06u -> TMA
         0xFF07u -> TAC
         0xFF0Fu -> IF
+
+        // Audio Registers
+        0xFF10u -> apu.NR10
+        0xFF11u -> apu.NR11
+        0xFF12u -> apu.NR12
+        0xFF13u -> apu.NR13
+        0xFF14u -> apu.NR14
+        0xFF16u -> apu.NR21
+        0xFF17u -> apu.NR22
+        0xFF18u -> apu.NR23
+        0xFF19u -> apu.NR24
+        0xFF1Au -> apu.NR30
+        0xFF1Bu -> apu.NR31
+        0xFF1Cu -> apu.NR32
+        0xFF1Du -> apu.NR33
+        0xFF1Eu -> apu.NR34
+        0xFF20u -> apu.NR41
+        0xFF21u -> apu.NR42
+        0xFF22u -> apu.NR43
+        0xFF23u -> apu.NR44
+        0xFF24u -> apu.NR50
+        0xFF25u -> apu.NR51
+        0xFF26u -> apu.NR52
+        in 0xFF30u..0xFF3Fu-> {
+            // Reading from wave RAM, which is used for sound
+            apu.waveRam[(position - 0xFF30u).toInt()]
+        }
+
         // LCD registers
         0xFF40u -> lcd?.LCDC ?: 0u
         0xFF41u -> lcd?.STAT ?: 0u
@@ -132,7 +190,6 @@ class IORegisters: IMemory {
         0xFF4Bu -> lcd?.WX ?: 0u
         0xFF50u -> BANK // This is the boot ROM disable register
         // Sound registers and others can be stubbed
-        in 0xFF10u..0xFF3Fu -> 0u // Sound stub
         else -> 0u
     }
 

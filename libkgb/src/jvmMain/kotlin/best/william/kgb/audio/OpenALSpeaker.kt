@@ -12,12 +12,15 @@ class OpenALSpeaker(): Speaker {
     private val device = ALC10.alcOpenDevice(null as String?)
     private val context = ALC10.alcCreateContext(device, null as IntArray?)
     private var source = 0
-    private val NUM_BUFFERS = 8
-    override val bufferSize: Int = 512
+    private val NUM_BUFFERS = 4
+    override val bufferSize: Int = 4096
+    private val mixerBuffer = ShortArray(bufferSize) // Buffer for mixing audio channels
     private val buffers = IntArray(NUM_BUFFERS)
     private var nextBuffer = 0
     private var initialized = false
 
+    private var hpLastInput: Short = 0
+    private var hpLastOutput: Short = 0
 
     init {
         if (device == MemoryUtil.NULL) throw IllegalStateException("Failed to open OpenAL device")
@@ -42,17 +45,28 @@ class OpenALSpeaker(): Speaker {
         }
 
         // Mix the 4 channels into a single mono buffer
-        val mixed = ShortArray(bufferSize) { i ->
+        for (i in mixerBuffer.indices) {
             val c1 = channel1[i]
             val c2 = channel2[i]
             val c3 = channel3[i]
             val c4 = channel4[i]
-            (c1 + c2 + c3 + c4).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            mixerBuffer[i] = ((c1 + c2 + c3 + c4) / 4).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
+
+/*        // Apply a simple low-pass filter
+        var lastOutput = hpLastOutput
+        val alpha = 0.3f // Low-pass filter coefficient
+        for (i in mixerBuffer.indices) {
+            val input = mixerBuffer[i]
+            val output = (alpha * input + (1 - alpha) * lastOutput).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            mixerBuffer[i] = output
+            lastOutput = output
+        }
+        hpLastOutput = lastOutput*/
 
         // Prepare OpenAL buffer
         val buf = memAllocShort(bufferSize)
-        buf.put(mixed).flip()
+        buf.put(mixerBuffer).flip()
         try {
             // Unqueue processed buffers so we can reuse them
             val processed = alGetSourcei(source, AL_BUFFERS_PROCESSED)

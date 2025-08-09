@@ -25,9 +25,15 @@ class MBC3(
     val ramBanks = List(4) { UByteArray(0x2000) } // 4 RAM banks of 8KB each
 
     init {
-        val banks: List<UByteArray> = bytes.toList()
-                .chunked(0x4000)
-                .map { it.toByteArray().toUByteArray() }
+        val banks: List<UByteArray> = bytes.asSequence()
+                .chunked(0x4000) {
+                    val array = UByteArray(it.size)
+                    for (i in it.indices) {
+                        array[i] = it[i].toUByte()
+                    }
+                    array
+                }
+                .toList()
 
         rom = BankedRom(banks)
         println("Initialzied MBC3 with ${banks.size} ROM banks and ${ramBanks.size} RAM banks")

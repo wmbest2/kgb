@@ -273,7 +273,7 @@ class LR35902(
             0xF0u -> `LDH A _a8`()
             0x02u, 0x12u, 0x22u, 0x32u -> `LD _nn A`(opcode)
             0x0Au, 0x1Au, 0x2Au, 0x3Au -> `LD A _nn`(opcode)
-            0xF8u -> `LD HL, SP+r8`()
+            0xF8u -> `LD HL SP+r8`()
             0xF9u -> `LD SP HL`()
             0x01u, 0x11u,
             0x21u, 0x31u -> `LD nn d16`(opcode)
@@ -540,7 +540,7 @@ class LR35902(
         return 20 // LD _nn, SP
     }
 
-    private fun `LD HL, SP+r8`(): Int {
+    private fun `LD HL SP+r8`(): Int {
         val offset = memory[programCounter++].toByte()
         val originalSP = stackPointer
         HL = (originalSP.toInt() + offset).toUShort()

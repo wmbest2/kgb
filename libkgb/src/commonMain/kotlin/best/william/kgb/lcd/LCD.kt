@@ -45,7 +45,10 @@ class LCD(
     val HBlankInterruptEnable: Boolean by flag(::STAT, 3)
     val LYCoincident: Boolean by flag(::STAT, 2)
     // Mode is the bottom 2 bits of STAT
-    val mode: UByte by masked(::STAT, 3u)
+    val mode: UByte
+        get() {
+            return STAT and 0x03u // Mask to get the bottom 2 bits
+        }
 
     // endregion
 
@@ -410,5 +413,11 @@ class LCD(
             }
         }
         return rendered
+    }
+
+    object NullRenderer : LCDRenderer {
+        override fun render(pixels: UByteArray) {
+            // No-op renderer, does nothing
+        }
     }
 }

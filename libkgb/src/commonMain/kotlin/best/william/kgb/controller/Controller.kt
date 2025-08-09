@@ -65,4 +65,6 @@ abstract class Controller() {
         // Default implementation returns false, can be overridden
         interruptProvider?.requestInterrupt(4)
     }
+
+    object NullController : Controller()
 }

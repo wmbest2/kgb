@@ -162,9 +162,13 @@ class LWJGLRenderer() : LCDRenderer, Controller() {
     }
 
     companion object {
-        val black = floatArrayOf(0f, 0f, 0f)
+/*        val black = floatArrayOf(0f, 0f, 0f)
         val white = floatArrayOf(1f, 1f, 1f)
         val lightGray = floatArrayOf(0.7f, 0.7f, 0.7f)
-        val darkGray = floatArrayOf(0.4f, 0.4f, 0.4f)
+        val darkGray = floatArrayOf(0.4f, 0.4f, 0.4f)*/
+        val black = floatArrayOf(0.15f, 0.18f, 0.22f)
+        val white = floatArrayOf(0.85f, 0.88f, 0.80f)
+        val lightGray = floatArrayOf(0.60f, 0.68f, 0.60f)
+        val darkGray = floatArrayOf(0.35f, 0.42f, 0.38f)
     }
 }

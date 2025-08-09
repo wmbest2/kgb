@@ -17,9 +17,9 @@ import kgb.rom.Cartridge
 
 class Gameboy(
     bootRom: ByteArray,
-    renderer: LCDRenderer,
-    speaker: Speaker,
-    controller: Controller
+    renderer: LCDRenderer = LCD.NullRenderer,
+    speaker: Speaker = APU.NullSpeaker,
+    controller: Controller = Controller.NullController
 ) {
     val _bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRom.toUByteArray())
     val vram = UByteArrayMemory(0x8000u..0x9FFFu)
@@ -66,6 +66,7 @@ class Gameboy(
     }
 
     fun loadCatridge(cartridge: Cartridge) {
+        reset()
         memoryMap.cartridge = cartridge
     }
 

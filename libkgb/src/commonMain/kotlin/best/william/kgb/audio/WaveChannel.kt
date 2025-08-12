@@ -18,9 +18,16 @@ class WaveChannel(
     private var lengthCounter: Int = 0
     private val lengthEnabled: Boolean
         get() = NR34.bit(7) // Check if sound is enabled
+
+
+    /**
+     * Calculates the combined frequency value from registers.
+     */
+    val freq: Int
+        get() = ((NR34.toInt() and 0x07) shl 8) or (NR33.toInt() and 0xFF)
+
     private val phaseTracker = PhaseTracker(
-        freqLow=::NR33,
-        freqHigh=::NR34,
+        freq = ::freq,
         modulo = 32,
         multiplier = 2 // Each phase corresponds to 2 samples in the wave RAM
     )

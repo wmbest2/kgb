@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM.
-    kotlin("multiplatform") version "2.2.0"
+    kotlin("multiplatform") version "2.2.10-RC"
 }
 
 group = "best.william"
@@ -15,6 +15,7 @@ repositories {
     google()
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/kotlinx-coroutines/maven") }
     maven { url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev") }
+    maven { url = uri("https://git.karmakrafts.dev/api/v4/projects/336/packages/maven") }
 }
 
 kotlin {
@@ -27,8 +28,21 @@ kotlin {
         }
     }
     mingwX64("windows") {
+
         binaries {
-            executable()
+
+            executable {
+                entryPoint = "best.william.kgb.main"
+                linkerOpts += listOf("-Wl,-Map=test.txt")
+            }
+        }
+    }
+
+    linuxX64() {
+        binaries {
+            executable {
+                entryPoint = "best.william.kgb.main"
+            }
         }
     }
 
@@ -54,17 +68,25 @@ kotlin {
                 implementation("org.lwjgl:lwjgl:3.3.3")
                 implementation("org.lwjgl:lwjgl-glfw:3.3.3")
                 implementation("org.lwjgl:lwjgl-opengl:3.3.3")
+                implementation("org.lwjgl:lwjgl-openal:3.3.3")
                 runtimeOnly("org.lwjgl:lwjgl:3.3.3:natives-windows")
                 runtimeOnly("org.lwjgl:lwjgl-glfw:3.3.3:natives-windows")
                 runtimeOnly("org.lwjgl:lwjgl-opengl:3.3.3:natives-windows")
+                runtimeOnly("org.lwjgl:lwjgl-openal:3.3.3:natives-windows")
             }
         }
         val jvmTest by getting
         val windowsMain by getting {
             dependencies {
-
             }
         }
         val windowsTest by getting
+    }
+
+
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
+        binaries.all {
+            freeCompilerArgs += "-Xadd-light-debug=enable"
+        }
     }
 }

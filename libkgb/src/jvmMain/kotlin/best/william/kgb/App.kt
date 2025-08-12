@@ -9,8 +9,8 @@ import kotlin.time.ExperimentalTime
 @ExperimentalTime
 @ExperimentalUnsignedTypes
 fun main() {
-    val bootRom= File("../reference/DMG_ROM.bin").readBytes()
-    val cartridge = File("../reference/roms/pokemon-blue.gb").loadCartridge()
+    val bootRom= File("C:\\Users\\wmbes\\IdeaProjects\\kgb\\reference\\DMG_ROM.bin").readBytes()
+    val cartridge = File("C:\\Users\\wmbes\\IdeaProjects\\kgb\\reference\\roms\\pokemon-blue.gb").loadCartridge()
 
     val renderer = LWJGLRenderer()
     val openALSpeaker = OpenALSpeaker()
@@ -18,7 +18,8 @@ fun main() {
         bootRom = bootRom,
         renderer = renderer,
         speaker = openALSpeaker,
-        controller = renderer
+        controller = renderer,
+        enableFrameLimiter = false
     )
 
     gameboy.loadCatridge(cartridge)
@@ -26,21 +27,9 @@ fun main() {
     println("Running ${cartridge.name}")
 
     try {
-
-        var previousFrameStart = System.nanoTime()
-        while (!renderer.shouldClose()) {
-            // Emulate CPU cycles and update LCD
-            val renderedFrame = gameboy.update()
+        gameboy.run { rendered, exit ->
             renderer.refresh()
-            // If a frame was rendered, we wait to maintain a consistent frame rate
-            if (renderedFrame) {
-                var elapsed = System.nanoTime() - previousFrameStart
-                val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toLong()
-                while (elapsed < targetFrameTimeNs) {
-                    elapsed = System.nanoTime() - previousFrameStart
-                }
-                previousFrameStart = System.nanoTime()
-            }
+            if (renderer.shouldClose()) exit() // Run waits for the calling application to tell it to stop
         }
     } catch (e: Exception) {
         println(e.printStackTrace())

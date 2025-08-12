@@ -13,7 +13,7 @@ import kotlin.time.TimeSource.Monotonic.markNow
 
 fun main() {
     val startTime = markNow()
-    val fileBytes = readFile("C:\\Users\\wmbes\\IdeaProjects\\kgb\\reference\\roms\\pokemon-blue.gb")
+    val fileBytes = readFile("/mnt/c/Users/wmbes/IdeaProjects/kgb/reference/roms/pokemon-blue.gb")
     if (fileBytes.isEmpty()) {
         println("File is empty or could not be read.")
     } else {
@@ -22,7 +22,7 @@ fun main() {
 
     val cartridge = fileBytes.loadCartridge()
     println("Cartridge loaded successfully: $cartridge")
-    val bootRom = readFile("C:\\Users\\wmbes\\IdeaProjects\\kgb\\reference\\DMG_ROM.bin")
+    val bootRom = readFile("/mnt/c/Users/wmbes/IdeaProjects/kgb/reference/DMG_ROM.bin")
 
     val frameRateCountingRenderer = FrameCountingRenderer()
 

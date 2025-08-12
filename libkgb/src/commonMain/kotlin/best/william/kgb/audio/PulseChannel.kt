@@ -93,9 +93,15 @@ open class PulseChannel(
     private val length: UByte
         get() = (DutyLength and 0x3Fu) // Bits 0-5 for length counter (0-63)
 
+
+    /**
+     * Calculates the combined frequency value from registers.
+     */
+    val freq: Int
+        get() = ((FreqHigh.toInt() and 0x07) shl 8) or (FreqLow.toInt() and 0xFF)
+
     private var phaseTracker: PhaseTracker = PhaseTracker(
-        freqLow = ::FreqLow,
-        freqHigh = ::FreqHigh,
+        freq = ::freq,
         modulo = 8 // Pulse channels have a modulo of 8 for phase tracking
     )
 

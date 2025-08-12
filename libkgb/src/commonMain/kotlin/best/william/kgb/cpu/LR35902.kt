@@ -946,9 +946,21 @@ class LR35902(
     }
 
     private fun rotate(direction: Direction, value: UByte, setZero: Boolean = true, withCarry: Boolean): UByte {
-        val (shiftedValue, rotatedBit, endBit) = when (direction) {
-            Direction.LEFT -> Triple(value.toUInt() shl 1, value.bit(7), 0)
-            Direction.RIGHT -> Triple(value.toUInt() shr 1, value.bit(0), 7)
+        val shiftedValue: UInt
+        val rotatedBit: Boolean
+        val endBit: Int
+
+        when(direction) {
+            Direction.LEFT -> {
+                shiftedValue = value.toUInt() shl 1
+                rotatedBit = value.bit(7)
+                endBit = 0
+            }
+            Direction.RIGHT -> {
+                shiftedValue = value.toUInt() shr 1
+                rotatedBit = value.bit(0)
+                endBit = 7
+            }
         }
 
         val newValue = if (withCarry) {

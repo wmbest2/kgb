@@ -19,9 +19,6 @@ class OpenALSpeaker(): Speaker {
     private var nextBuffer = 0
     private var initialized = false
 
-    private var hpLastInput: Short = 0
-    private var hpLastOutput: Short = 0
-
     init {
         if (device == MemoryUtil.NULL) throw IllegalStateException("Failed to open OpenAL device")
         ALC10.alcMakeContextCurrent(context)

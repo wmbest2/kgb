@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalUnsignedTypes::class)
+@file:OptIn(ExperimentalUnsignedTypes::class, ExperimentalTime::class)
 
 package best.william.kgb
 
@@ -6,30 +6,28 @@ import best.william.kgb.audio.APU
 import best.william.kgb.audio.Speaker
 import best.william.kgb.controller.Controller
 import best.william.kgb.cpu.LR35902 as CPU
-import best.william.kgb.memory.MemoryMirror
 import kgb.lcd.LCD
 import kgb.lcd.LCDRenderer
 import kgb.memory.IORegisters
 import kgb.memory.InterruptEnabledMemory
-import best.william.kgb.memory.MemoryMapper
+import kgb.memory.GBMemoryMap
 import kgb.memory.UByteArrayMemory
 import kgb.rom.Cartridge
+import kotlin.time.DurationUnit
+import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource.Monotonic.markNow
+import kotlin.time.toDuration
+
+typealias UpdateCallback = (rendered: Boolean, exitCallback: () -> Unit) -> Unit
 
 class Gameboy(
     bootRom: ByteArray,
     renderer: LCDRenderer = LCD.NullRenderer,
     speaker: Speaker = APU.NullSpeaker,
-    controller: Controller = Controller.NullController
+    controller: Controller = Controller.NullController,
+    val enableFrameLimiter: Boolean = true
 ) {
     val _bootRom = UByteArrayMemory(0x0000u..0x00FFu, bootRom.toUByteArray())
-    val vram = UByteArrayMemory(0x8000u..0x9FFFu)
-    val wram = UByteArrayMemory(0xC000u..0xDFFFu)
-    val echoRam = MemoryMirror(0xE000u..0xFDFFu, wram)
-
-    // Unused memory 0xFF80 to 0xFFFE
-    // This is typically used for high RAM (HRAM) and is not directly accessible by the CPU,
-    // but can be used for temporary storage or flags.
-    val hram = UByteArrayMemory(0xFF80u..0xFFFEu)
 
     // I/O Registers 0xFF00 to 0xFF7F
     val ioRegisters = IORegisters()
@@ -39,15 +37,13 @@ class Gameboy(
     val apu = APU(speaker = speaker)
     val lcd = LCD(renderer)
 
-    val memoryMap = MemoryMapper(
-        _bootRom, // Boot ROM is usually only used for the first few cycles
-        vram, // Video RAM 0x8000 to 0x9FFF
-        wram,
-        echoRam,
-        lcd.oam,
-        ioRegisters,
-        hram,
-        interruptEnabledMemory
+
+
+    val memoryMap = GBMemoryMap(
+        boot = _bootRom,
+        ioRegisters = ioRegisters,
+        interruptEnabledMemory = interruptEnabledMemory,
+        oamMemory = lcd.oam
     )
 
     init {
@@ -74,10 +70,7 @@ class Gameboy(
         cpu.reset()
         apu.reset()
         lcd.reset()
-        memoryMap.cartridge = null
-        vram.clear()
-        wram.clear()
-        hram.clear()
+        memoryMap.reset()
     }
 
     fun update(): Boolean {
@@ -85,6 +78,27 @@ class Gameboy(
         val cycles = cpu.step()
         apu.update(cycles)
         return lcd.update(cycles)
+    }
+
+    fun run(updateCallback: UpdateCallback = { _, _ ->  }) {
+        var shouldExit = false
+        val exitCallback = {
+            shouldExit = true
+        }
+        val targetFrameTimeNs = (1_000_000_000.0 / 59.7).toDuration(DurationUnit.NANOSECONDS)
+        var previousFrameStart = markNow() + targetFrameTimeNs
+        while (!shouldExit) {
+            val rendered = update()
+            updateCallback(rendered, exitCallback)
+            // Add a sleep or yield to prevent busy-waiting
+            if (rendered) {
+                while (enableFrameLimiter && previousFrameStart.hasNotPassedNow()) {
+                    // Busy-wait until the target frame time is reached
+                }
+
+                previousFrameStart = markNow() + targetFrameTimeNs
+            }
+        }
     }
 
     override fun toString(): String {

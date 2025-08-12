@@ -243,20 +243,20 @@ class LCD(
     }
 
     @JvmInline
-    value class Sprite(val value: UInt) {
+    value class Sprite(val value: Int) {
         constructor(
             x: UInt,
             y: UInt,
             tileIndex: UByte,
             flags: UByte
         ) : this(
-            (x shl 24) or (y shl 16) or (tileIndex.toUInt() shl 8) or flags.toUInt()
+            (x.toInt() shl 24) or (y.toInt() shl 16) or (tileIndex.toInt() shl 8) or flags.toInt()
         )
 
-        val x: UInt get() = (value shr 24) and 0xFFu
-        val y: UInt get() = (value shr 16) and 0xFFu
-        val tileIndex: UByte get() = ((value shr 8) and 0xFFu).toUByte()
-        val flags: UByte get() = (value and 0xFFu).toUByte()
+        val x: UInt get() = ((value shr 24) and 0xFF).toUInt()
+        val y: UInt get() = ((value shr 16) and 0xFF).toUInt()
+        val tileIndex: UByte get() = ((value shr 8) and 0xFF).toUByte()
+        val flags: UByte get() = (value and 0xFF).toUByte()
     }
 
     private fun renderSprites(line: UByte, pixels: UByteArray) {

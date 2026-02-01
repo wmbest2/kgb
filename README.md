@@ -91,7 +91,7 @@ val gameboy = Gameboy(
 )
 
 // Load and run
-gameboy.loadCatridge(cartridge)
+gameboy.loadCartridge(cartridge)
 gameboy.run { rendered, exit ->
     renderer.refresh()
     if (renderer.shouldClose()) exit()
